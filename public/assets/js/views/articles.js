@@ -1,4 +1,4 @@
-import { buildRoute } from '../router.js?v=24';
+import { buildRoute } from '../router.js?v=26';
 import { formatDate, UNKNOWN_DATE } from '../utils/format.js';
 import {
     button,

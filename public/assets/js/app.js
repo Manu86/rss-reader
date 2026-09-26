@@ -1,13 +1,13 @@
-import { ApiError, NetworkError, createApiClient } from './api/client.js';
+import { ApiError, NetworkError, createApiClient } from './api/client.js?v=2';
 import { closeDialog } from './components/dialog.js';
 import { showToast } from './components/feedback.js';
-import { ManagementView } from './views/management.js';
-import { SettingsView } from './views/settings.js?v=2';
+import { ManagementView } from './views/management.js?v=2';
+import { SettingsView } from './views/settings.js?v=3';
 import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js';
 import { createLoginView } from './views/login.js';
-import { ArticlesView } from './views/articles.js?v=25';
-import { ReaderView } from './views/reader.js?v=29';
-import { buildRoute, parseRoute } from './router.js?v=25';
+import { ArticlesView } from './views/articles.js?v=26';
+import { ReaderView } from './views/reader.js?v=30';
+import { buildRoute, parseRoute } from './router.js?v=26';
 import { errorMessage, el, icon, setChildren } from './utils/dom.js';
 
 const app = {

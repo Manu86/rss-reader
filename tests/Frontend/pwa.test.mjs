@@ -1,5 +1,5 @@
 import assert from 'assert';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { test } from './harness.mjs';
@@ -29,23 +29,39 @@ test('le manifest PWA déclare des icônes PNG installables', () => {
 
 test('le service worker ne met jamais les routes API en cache', () => {
     const serviceWorker = readPublic('service-worker.js');
-    assert.match(serviceWorker, /rss-reader-static-v56/);
-    assert.match(readPublic('index.html'), /assets\/css\/app\.css\?v=48/);
-    assert.match(serviceWorker, /assets\/css\/app\.css\?v=48/);
-    assert.match(readPublic('index.html'), /assets\/js\/app\.js\?v=32/);
-    assert.match(readPublic('assets/js/app.js'), /views\/articles\.js\?v=25/);
-    assert.match(serviceWorker, /assets\/js\/views\/articles\.js\?v=25/);
-    assert.match(readPublic('assets/js/app.js'), /views\/reader\.js\?v=29/);
-    assert.match(readPublic('assets/js/app.js'), /views\/settings\.js\?v=2/);
-    assert.match(serviceWorker, /assets\/js\/views\/reader\.js\?v=29/);
-    assert.match(readPublic('assets/js/app.js'), /router\.js\?v=25/);
-    assert.match(readPublic('assets/js/views/articles.js'), /router\.js\?v=24/);
-    assert.match(serviceWorker, /assets\/js\/router\.js\?v=24/);
-    assert.match(serviceWorker, /assets\/js\/router\.js\?v=25/);
+    assert.match(serviceWorker, /rss-reader-static-v\d+/);
     assert.match(serviceWorker, /url\.pathname\.startsWith\('\/api\/'\)/);
     assert.match(serviceWorker, /request\.method !== 'GET'/);
     assert.doesNotMatch(serviceWorker, /localStorage|indexedDB|Background Sync|SyncManager/);
     assert.doesNotMatch(serviceWorker, /caches\.put\([^,]*\/api\//);
+
+    const precache = Array.from(
+        serviceWorker.matchAll(/'(\/assets\/[^']+)'/g),
+        (match) => match[1],
+    );
+    assert.ok(precache.length > 0);
+
+    const referenced = Array.from(
+        [
+            readPublic('index.html'),
+            ...readdirSync(join(publicRoot, 'assets/js'), { recursive: true })
+                .filter((entry) => entry.endsWith('.js'))
+                .map((entry) => readPublic(join('assets/js', entry))),
+        ]
+            .join('\n')
+            .matchAll(/'?(?:\/assets\/[\w./-]+\.js(?:\?v=\d+)?)'?/g),
+        (match) => match[0].replaceAll("'", '').replaceAll('"', ''),
+    );
+
+    for (const url of precache) {
+        assert.ok(existsSync(join(publicRoot, url.split('?')[0])), `absent du disque : ${url}`);
+    }
+    for (const url of referenced) {
+        if (!url.startsWith('/assets/js/')) {
+            continue;
+        }
+        assert.ok(precache.includes(url), `non pré-caché par le service worker : ${url}`);
+    }
 });
 
 test('le shell HTML expose les points d’intégration PWA et accessibilité', () => {

@@ -1,5 +1,5 @@
 import { formatDate, UNKNOWN_DATE } from '../utils/format.js';
-import { buildRoute } from '../router.js?v=25';
+import { buildRoute } from '../router.js?v=26';
 import { openDialog } from '../components/dialog.js';
 import {
     button,
