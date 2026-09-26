@@ -1,5 +1,9 @@
 # RSS Reader
 
+[![CI](https://img.shields.io/github/actions/workflow/status/Manu86/rss-reader/ci.yml?branch=main)](https://github.com/Manu86/rss-reader/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Manu86/rss-reader?sort=semver)](https://github.com/Manu86/rss-reader/releases)
+[![License: MIT](https://img.shields.io/github/license/Manu86/rss-reader)](LICENSE)
+
 Lecteur RSS/Atom auto-hébergé et multi-utilisateur, développé en PHP, SQLite
 et JavaScript natif. Il propose une interface responsive installable comme
 PWA et une API JSON.
