@@ -1,4 +1,8 @@
+# Dépendances et artefacts locaux
 /vendor/
+/node_modules/
+
+# Application
 /var/*
 !/var/.gitkeep
 !/var/database/
@@ -15,16 +19,16 @@
 !/var/log/.gitkeep
 !/var/tmp/
 /var/tmp/*
-!/var/tmp/.gitkeep
-/.phpunit.cache/
-/.phpunit.result.cache
-/.env
-/.env.*
-!/\.env.example
+!/var/tmp/*/
 
-# PHP-CS-Fixer cache (var/)
+# Cache d'outils (var/)
 var/cache/php-cs-fixer.cache
 
-# Node (dev deps tests frontend)
-/node_modules/
+# Fichiers locaux sensibles ou éphémères (le projet n'utilise pas .env : le secret
+# vit dans var/app.secret ou la variable APP_SECRET — voir README / docs)
+/.phpunit.cache/
+/.phpunit.result.cache
 /.php-cs-fixer.cache
+.env
+.env.*
+!.env.example

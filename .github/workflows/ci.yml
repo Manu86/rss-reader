@@ -1,0 +1,40 @@
+name: CI
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+permissions:
+    contents: read
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        steps:
+            -   uses: actions/checkout@v4
+
+            -   name: PHP 8.2
+                uses: shivammathur/setup-php@v2
+                with:
+                    php-version: '8.2'
+                    coverage: none
+
+            -   name: Install PHP dependencies
+                run: composer install --no-interaction --no-progress --prefer-dist
+
+            -   name: Node 18
+                uses: actions/setup-node@v4
+                with:
+                    node-version: '18'
+
+            -   name: Install frontend test dependencies
+                run: npm ci
+
+            -   name: composer check (lint + analyse statique + tests)
+                run: composer check
+
+            -   name: Frontend tests
+                run: |
+                    node tests/Frontend/check.mjs
+                    node tests/Frontend/run.mjs
