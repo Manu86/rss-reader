@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Journal sécurisé</title>
+    <link>https://site.test/news/</link>
+    <description>Exemple</description>
+    <item>
+      <guid isPermaLink="false">article-1</guid>
+      <title>Premier article</title>
+      <link>https://site.test/articles/1</link>
+      <dc:creator>Alice</dc:creator>
+      <pubDate>Wed, 23 Sep 2026 14:30:00 +0200</pubDate>
+      <description><![CDATA[<p>Résumé <strong>utile</strong><script>alert(1)</script></p>]]></description>
+      <content:encoded><![CDATA[<p>Contenu <a href="javascript:alert(1)">complet</a></p>]]></content:encoded>
+    </item>
+    <item>
+      <title>Sans GUID</title>
+      <link>/articles/2#fragment</link>
+      <pubDate>date impossible</pubDate>
+      <description><![CDATA[<p>Deuxième résumé</p>]]></description>
+    </item>
+    <item><title>Élément inutilisable</title></item>
+  </channel>
+</rss>

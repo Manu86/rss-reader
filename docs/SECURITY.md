@@ -1,0 +1,315 @@
+# RSS Reader --- Security Specification
+
+## Principles
+
+All external input is untrusted.
+
+Authentication is not authorization. User ownership is enforced
+server-side and as close to database access as practical.
+
+Security controls should be centralized and fail safely.
+
+## Authentication and passwords
+
+Use server-side PHP sessions.
+
+Do not use JWT, OAuth, API tokens or browser-stored auth tokens in V1.
+
+Passwords:
+
+-   use `password_hash()` / `password_verify()`;
+-   prefer `PASSWORD_DEFAULT`;
+-   minimum 12 characters;
+-   support long passphrases;
+-   never log, echo or store plaintext passwords;
+-   never silently truncate.
+
+Login failures use generic messages.
+
+Apply simple rate limiting/progressive protection to repeated login
+attempts without exposing account existence.
+
+CLI password reset should use non-echoed interactive input where
+practical.
+
+## Sessions
+
+Session cookies:
+
+-   opaque session ID only;
+-   `HttpOnly`;
+-   `SameSite=Lax` or stricter when compatible;
+-   `Secure` in production;
+-   application-specific cookie name.
+
+Regenerate the session ID after login and password change.
+
+Logout invalidates server-side authenticated state.
+
+Use a reasonable session lifetime; no effectively permanent login.
+
+Production requires HTTPS.
+`APP_SESSION_SECURE` defaults to enabled and cannot be disabled when
+`APP_ENV=production`; production always forces the cookie's `Secure` flag on.
+Invalid values are rejected at startup. Disable it only for local HTTP
+development with `APP_ENV` set to a non-production value.
+
+## Authorization and user isolation
+
+Never accept the authenticated user ID from request input.
+
+Every operation on categories, feeds, articles, settings, search, OPML
+and media must be scoped to the session user.
+
+Prefer user-scoped repository queries such as:
+
+``` sql
+SELECT * FROM articles
+WHERE id = :id AND user_id = :user_id;
+```
+
+Cross-user resource access should generally return `404`.
+
+Category/feed and feed/article ownership relationships must be
+validated.
+
+## CSRF
+
+Because authentication uses cookies, protect every state-changing
+request (`POST`, `PUT`, `PATCH`, `DELETE`) with a server-generated CSRF
+mechanism.
+
+Tokens must be unpredictable and tied to the authenticated session.
+
+Login protection should follow the chosen consistent session/CSRF
+design.
+
+## SQL injection
+
+Use PDO prepared statements with bound values.
+
+Never concatenate untrusted values into SQL.
+
+For dynamic ordering/filter names, use explicit server-side allowlists.
+
+## XSS and article HTML
+
+RSS/Atom HTML is untrusted.
+
+Sanitize article HTML using a robust allowlist-based sanitizer.
+
+Allow only necessary reading markup. Remove dangerous
+elements/attributes including scripts, event handlers, embedded active
+content and `javascript:` URLs.
+
+Do not attempt to secure HTML with regex.
+
+Frontend code should prefer `textContent` for plain text.
+
+A strict Content Security Policy should provide defense in depth, not
+replace sanitization.
+
+## SSRF
+
+Every server-side remote URL fetch must use the centralized safe HTTP
+client.
+
+Only `http` and `https` are allowed.
+
+Block requests resolving to loopback, private, link-local,
+multicast/reserved/internal destinations as appropriate for IPv4 and
+IPv6.
+
+Requirements:
+
+-   resolve/validate destination before connection;
+-   reject mixed unsafe DNS answers conservatively;
+-   validate every redirect target;
+-   limit redirects;
+-   reject URL credentials;
+-   keep TLS verification enabled;
+-   use connection and total timeouts;
+-   enforce response size limits.
+
+The same rules apply to feed discovery, feeds, images and favicons.
+
+Do not create alternate fetch paths that bypass these checks.
+
+Implementation rules for the centralized client:
+
+- reject any DNS result set containing an unsafe address, even when other
+  answers are public;
+- pin one validated address for the actual connection while retaining the
+  original hostname for TLS verification;
+- disable inherited HTTP proxy settings;
+- handle redirects in application code and repeat the full validation;
+- stream response bodies through a hard byte limit;
+- allow only controlled outbound request headers;
+- leave format/MIME/content validation to the calling feed, discovery or
+  media service, which knows the expected response type.
+
+## XML
+
+RSS, Atom and OPML XML parsing must not allow unsafe external
+entity/network/file resolution.
+
+Protect against XXE and abusive entity expansion.
+
+Use parser settings/APIs appropriate to the selected maintained PHP/XML
+libraries.
+
+## Remote media
+
+Downloaded images/favicons must be treated as hostile.
+
+Validate actual content, supported MIME/type and size.
+
+Use application-generated filenames/storage keys.
+
+Never trust remote filenames as local paths.
+
+Reject path traversal.
+
+V1 should reject SVG for downloaded article media because of its
+active-content complexity.
+
+Media storage remains outside the public document root and is served
+through controlled application access.
+
+Images embedded in sanitized article HTML are not downloaded. They may retain
+only an absolute HTTP(S) `src` without URL credentials. All other attributes
+are removed except bounded alternative text and application-controlled lazy
+loading, asynchronous decoding and no-referrer attributes. This exception can
+disclose the reader's IP address to the image host; active video/iframe embeds
+remain forbidden.
+
+The current implementation accepts validated JPEG, PNG, GIF, WebP and ICO
+content within configurable byte, dimension and pixel limits. The declared
+HTTP content type must match the detected content when present. Storage keys
+are random application-generated values under a user-specific directory.
+Media routes authorize the owning feed/article and never accept a storage key
+from request input. SVG is rejected.
+
+## OPML uploads
+
+OPML import must:
+
+-   limit upload size;
+-   parse XML safely;
+-   ignore untrusted filenames;
+-   reject malformed/unsafe files;
+-   clean temporary files.
+
+Imported feed URLs still pass normal SSRF/feed validation.
+
+The implementation accepts only the multipart `file` field, reads at most
+1 MiB, rejects DOCTYPE/entity declarations before DOM parsing, uses
+`LIBXML_NONET` without entity expansion and limits one document to 100
+subscriptions. PHP owns and removes the upload temporary file; the original
+filename and declared MIME type are never used. Every imported subscription
+then runs through the centralized safe feed synchronization pipeline.
+
+## Filesystem
+
+SQLite, configuration, logs, temporary files and media must not be
+directly downloadable.
+
+Resolve storage paths from trusted application identifiers, not
+request-supplied paths.
+
+File permissions should follow least privilege.
+
+## API
+
+-   Validate all input server-side.
+-   Reject invalid types/ranges.
+-   Prefer rejecting unknown write fields.
+-   Do not expose stack traces, SQL, paths or secrets.
+-   Do not use permissive authenticated CORS.
+-   Apply reasonable abuse limits to expensive remote-fetch endpoints.
+-   Return consistent errors from `API.md`.
+
+Feed discovery currently consumes one persisted attempt per authenticated
+request and is limited to 10 attempts per user over 5 minutes. Invalid and
+failed remote requests also count, preventing cheap bypasses of the limit.
+Feed creation and manual refresh use the same persisted limiter with separate
+action buckets, also limited to 10 requests per user over 5 minutes.
+
+The cron synchronizer is a local CLI command, not an HTTP endpoint. It only
+selects active feeds owned by enabled users and uses an exclusive filesystem
+lock to prevent overlapping batches. Operational failure logs contain numeric
+user/feed identifiers and controlled codes, never remote bodies, session data
+or credentials.
+
+## Security headers
+
+Production should configure appropriate headers, including:
+
+``` text
+Content-Security-Policy
+X-Content-Type-Options: nosniff
+Referrer-Policy
+Permissions-Policy
+```
+
+Frame embedding should be restricted through CSP unless explicitly
+required.
+
+The application shell permits images from its own origin and from HTTP(S)
+origins because sanitized article content can reference remote images. Other
+resource types remain restricted to the application origin. Browsers can still
+block an HTTP image as mixed content when the application itself uses HTTPS.
+
+## PWA/browser storage
+
+Do not store authentication tokens or user RSS data in localStorage.
+
+V1 service-worker cache contains static application assets only.
+
+Authenticated API responses, article data and settings are not persisted
+in Cache Storage/IndexedDB for offline use.
+
+Logout clears sensitive in-memory frontend state.
+
+## Logging
+
+Never log:
+
+-   plaintext passwords;
+-   session IDs;
+-   CSRF tokens;
+-   secrets;
+-   unnecessary full sensitive payloads.
+
+Log enough context for diagnosis without exposing private content.
+
+## Dependencies and production
+
+Use maintained dependencies and supported runtime versions.
+
+Run `composer audit` as an online maintenance check.
+
+Production:
+
+-   HTTPS;
+-   debug disabled;
+-   secure cookie settings;
+-   non-public database/media/config;
+-   least-privilege writable directories.
+
+## Mandatory security tests
+
+At minimum test:
+
+-   authentication/session behavior;
+-   cross-user access;
+-   CSRF;
+-   SQL-safe input paths;
+-   SSRF including redirect to private address;
+-   malicious XML/XXE fixtures;
+-   XSS sanitization;
+-   invalid/oversized media;
+-   path traversal;
+-   account switching/PWA cache privacy.
+
+Detailed test organization belongs in `TESTING.md`.

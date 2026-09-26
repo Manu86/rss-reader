@@ -1,0 +1,14 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\ApplicationFactory;
+
+$root = dirname(__DIR__);
+require $root . '/vendor/autoload.php';
+
+$application = ApplicationFactory::createConsole($root);
+
+/** @var list<string> $argv */
+exit($application->run($argv));

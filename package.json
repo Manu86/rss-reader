@@ -1,0 +1,12 @@
+{
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "test": "node tests/Frontend/run.mjs",
+        "check": "node tests/Frontend/check.mjs"
+    },
+    "devDependencies": {
+        "axe-core": "^4.13.0",
+        "jsdom": "^24.1.3"
+    }
+}

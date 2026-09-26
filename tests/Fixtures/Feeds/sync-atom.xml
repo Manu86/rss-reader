@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Journal Atom</title>
+  <link rel="alternate" href="https://site.test/atom/"/>
+  <id>urn:journal:atom</id>
+  <entry>
+    <title>Entrée Atom</title>
+    <id>urn:article:atom:1</id>
+    <link href="/atom/article-1"/>
+    <updated>2026-09-23T10:15:00+02:00</updated>
+    <author><name>Bob</name></author>
+    <summary type="html">&lt;p&gt;Résumé Atom&lt;/p&gt;</summary>
+    <content type="html">&lt;p&gt;Contenu Atom&lt;/p&gt;</content>
+  </entry>
+</feed>

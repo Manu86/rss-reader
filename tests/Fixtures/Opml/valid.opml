@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>Abonnements de test</title>
+  </head>
+  <body>
+    <outline text="Technique" title="Technique">
+      <outline type="rss" text="PHP" title="PHP" xmlUrl="https://example.org/php.xml" />
+      <outline type="rss" text="SQLite" title="SQLite" xmlUrl="https://example.net/sqlite.xml" />
+    </outline>
+    <outline text="Actualités" title="Actualités">
+      <outline type="rss" text="Actualités générales" xmlUrl="https://example.org/news.xml" />
+    </outline>
+    <outline text="Vide" title="Vide" />
+    <outline type="rss" text="Sans catégorie" xmlUrl="https://example.net/direct.xml" />
+  </body>
+</opml>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Flux illustré</title>
+    <link>https://site.test/news/</link>
+    <image><url>/assets/favicon.png</url></image>
+    <item>
+      <guid>media-1</guid>
+      <title>Article illustré</title>
+      <link>https://site.test/articles/1</link>
+      <media:content url="https://cdn.test/images/large.png" medium="image" type="image/png"/>
+      <media:thumbnail url="https://cdn.test/images/thumb.png"/>
+    </item>
+    <item>
+      <guid>media-2</guid>
+      <title>Image HTML</title>
+      <link>https://site.test/articles/2</link>
+      <description><![CDATA[<p>Texte</p><img src="/images/content.jpg" onerror="alert(1)">]]></description>
+    </item>
+  </channel>
+</rss>

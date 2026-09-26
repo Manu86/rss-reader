@@ -1,0 +1,30 @@
+/vendor/
+/var/*
+!/var/.gitkeep
+!/var/database/
+/var/database/*
+!/var/database/.gitkeep
+!/var/media/
+/var/media/*
+!/var/media/.gitkeep
+!/var/cache/
+/var/cache/*
+!/var/cache/.gitkeep
+!/var/log/
+/var/log/*
+!/var/log/.gitkeep
+!/var/tmp/
+/var/tmp/*
+!/var/tmp/.gitkeep
+/.phpunit.cache/
+/.phpunit.result.cache
+/.env
+/.env.*
+!/\.env.example
+
+# PHP-CS-Fixer cache (var/)
+var/cache/php-cs-fixer.cache
+
+# Node (dev deps tests frontend)
+/node_modules/
+/.php-cs-fixer.cache

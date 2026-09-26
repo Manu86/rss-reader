@@ -1,0 +1,59 @@
+{
+    "name": "rss-reader/rss-reader",
+    "description": "Lecteur RSS/Atom multi-utilisateur auto-hébergé",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.2",
+        "ext-ctype": "*",
+        "ext-curl": "*",
+        "ext-dom": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-pdo": "*",
+        "ext-pdo_sqlite": "*",
+        "ext-session": "*",
+        "league/commonmark": "^2.9.1"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.95",
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "php vendor/phpunit/phpunit/phpunit",
+        "analyse": "php vendor/phpstan/phpstan/phpstan analyse --no-progress --debug",
+        "cs:check": "php vendor/friendsofphp/php-cs-fixer/php-cs-fixer fix --dry-run --diff",
+        "cs:fix": "php vendor/friendsofphp/php-cs-fixer/php-cs-fixer fix",
+        "lint": [
+            "@composer validate --strict --no-check-publish",
+            "find bin config migrations public src tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l",
+            "node tests/Frontend/check.mjs",
+            "node tests/Frontend/run.mjs"
+        ],
+        "check": [
+            "@cs:check",
+            "@lint",
+            "@analyse",
+            "@test"
+        ],
+        "quality": [
+            "@cs:fix",
+            "@check"
+        ]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {}
+    }
+}

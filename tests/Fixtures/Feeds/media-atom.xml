@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <title>Flux Atom illustré</title>
+  <link rel="alternate" href="https://site.test/atom/"/>
+  <icon>/icons/atom.png</icon>
+  <entry>
+    <id>atom-media-1</id>
+    <title>Entrée illustrée</title>
+    <link rel="enclosure" type="image/jpeg" href="/images/atom.jpg"/>
+  </entry>
+</feed>
