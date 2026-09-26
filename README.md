@@ -77,3 +77,9 @@ Le frontend exige Node 18+. Détails et structure des tests dans
 
 Les règles de contribution destinées aux agents de développement figurent
 dans [`AGENTS.md`](AGENTS.md).
+
+## Licence
+
+Code source distribué sous [licence MIT](LICENSE). Dépendances tierces
+gérées par Composer (`composer show --license` pour la liste des licences
+incluses).

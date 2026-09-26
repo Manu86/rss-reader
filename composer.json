@@ -2,7 +2,7 @@
     "name": "rss-reader/rss-reader",
     "description": "Lecteur RSS/Atom multi-utilisateur auto-hébergé",
     "type": "project",
-    "license": "proprietary",
+    "license": "MIT",
     "require": {
         "php": "^8.2",
         "ext-ctype": "*",
