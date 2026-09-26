@@ -891,10 +891,10 @@ export class ArticlesView {
             return 'Résultats de recherche';
         }
         if (nonEmpty(options.categoryName)) {
-            return `Articles — ${textValue(options.categoryName)}`;
+            return `Articles - ${textValue(options.categoryName)}`;
         }
         if (nonEmpty(options.feedName)) {
-            return `Articles — ${textValue(options.feedName)}`;
+            return `Articles - ${textValue(options.feedName)}`;
         }
         return VIEW_LABELS[filter] || DEFAULT_TITLE;
     }

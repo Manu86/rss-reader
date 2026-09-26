@@ -9,8 +9,8 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="/assets/icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/assets/icons/icon-192.png">
-    <link rel="stylesheet" href="/assets/css/app.css?v=43">
-    <script type="module" src="/assets/js/app.js?v=30"></script>
+    <link rel="stylesheet" href="/assets/css/app.css?v=46">
+    <script type="module" src="/assets/js/app.js?v=31"></script>
 </head>
 <body>
 <a class="skip-link" href="#contenu-principal">Aller au contenu principal</a>
@@ -119,12 +119,12 @@
 
 <section id="login-view" class="auth-view" aria-labelledby="login-title" hidden>
     <div class="auth-card">
-        <div class="auth-brand" aria-hidden="true">
-            <svg class="icon"><use href="#icon-rss"></use></svg>
+        <div class="auth-brand">
+            <svg class="icon" aria-hidden="true"><use href="#icon-rss"></use></svg>
+            <h1 id="login-title" class="auth-brand-title">RSS Reader</h1>
         </div>
         <p class="eyebrow">Votre espace de lecture</p>
-        <h1 id="login-title">Connexion</h1>
-        <p class="auth-intro">Accédez à vos flux, à vos favoris et à votre historique.</p>
+        <p class="auth-intro">Connexion : accédez à vos flux, à vos favoris et à votre historique.</p>
         <div id="login-notice" class="notice notice-info" role="status" hidden></div>
         <form id="login-form" class="stack-form">
             <div class="field">

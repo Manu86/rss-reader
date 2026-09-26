@@ -56,12 +56,12 @@ export function formatNumber(value, options = {}) {
         (typeof value !== 'number' && typeof value !== 'string')
         || (typeof value === 'string' && value.trim() === '')
     ) {
-        return '—';
+        return '-';
     }
 
     const number = Number(value);
     if (!Number.isFinite(number)) {
-        return '—';
+        return '-';
     }
 
     return new Intl.NumberFormat('fr-FR', options).format(number);

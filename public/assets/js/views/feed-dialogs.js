@@ -578,7 +578,7 @@ export function openFeedEditorDialog({ feed, categories = [], onSave } = {}) {
                 }, content);
                 details.appendChild(el('dd', {}, [link]));
             } else {
-                details.appendChild(el('dd', {}, content || '—'));
+                details.appendChild(el('dd', {}, content || '- '));
             }
         };
         addDetail('URL du flux', feedUrl);

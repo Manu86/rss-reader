@@ -63,7 +63,7 @@ function showLogin(message = '') {
     setVisible(dom.app, false);
     setVisible(dom.offline, false);
     setVisible(dom.login, true);
-    document.title = 'Connexion — RSS Reader';
+    document.title = 'Connexion - RSS Reader';
     if (!app.loginView) {
         app.loginView = createLoginView({
             root: document,
@@ -78,7 +78,7 @@ function showOffline(error) {
     setVisible(dom.login, false);
     setVisible(dom.app, false);
     setVisible(dom.offline, true);
-    document.title = 'Serveur indisponible — RSS Reader';
+    document.title = 'Serveur indisponible - RSS Reader';
     const message = byId('offline-message');
     if (message) {
         message.textContent = error instanceof NetworkError
@@ -649,7 +649,7 @@ function focusRoute(route, previousRoute = null) {
             : route.name === 'settings'
                 ? 'Paramètres'
                 : (dom.articleTitle?.textContent.trim() || 'Articles');
-    document.title = `${pageName} — RSS Reader`;
+    document.title = `${pageName} - RSS Reader`;
 }
 
 function bindEvents() {

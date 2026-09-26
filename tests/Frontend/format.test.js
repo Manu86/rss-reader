@@ -25,8 +25,8 @@ test('les dates sont françaises, inconnues ou rendues explicitement en UTC', ()
 test('les nombres utilisent le format français', () => {
     assert.strictEqual(formatNumber(1234567).replace(/\s/g, ' '), '1 234 567');
     assert.strictEqual(formatNumber('42'), '42');
-    assert.strictEqual(formatNumber(Number.NaN), '—');
-    assert.strictEqual(formatNumber(null), '—');
+    assert.strictEqual(formatNumber(Number.NaN), '-');
+    assert.strictEqual(formatNumber(null), '-');
 });
 
 test('les statuts de flux sont lisibles en français', () => {
