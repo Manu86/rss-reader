@@ -1,4 +1,5 @@
 import { formatDate, UNKNOWN_DATE } from '../utils/format.js';
+import { buildRoute } from '../router.js?v=25';
 import { openDialog } from '../components/dialog.js';
 import {
     button,
@@ -402,9 +403,15 @@ function articleFeed(article) {
         return article.source;
     }
     return {
+        id: article.feed_id,
         name: article.feed_name ?? article.source_name,
         favicon_url: article.favicon_url ?? article.feed_favicon_url,
     };
+}
+
+function sourceHref(article) {
+    const id = articleFeed(article).id;
+    return positiveInteger(id) ? buildRoute('feed', { id }) : null;
 }
 
 function sourceName(article) {
@@ -895,10 +902,16 @@ export class ReaderView {
                     id: 'reader-article-title',
                     text: title,
                 }),
-                viewEl('div', { className: 'reader-source' }, [
-                    createFavicon(article),
-                    viewEl('span', { className: 'reader-source-name', text: sourceName(article) }),
-                ]),
+                (() => {
+                    const href = sourceHref(article);
+                    return viewEl(href === null ? 'div' : 'a', {
+                        className: `reader-source${href === null ? '' : ' reader-source-link'}`,
+                        attrs: href === null ? {} : { href, title: 'Voir les articles de cette source' },
+                    }, [
+                        createFavicon(article),
+                        viewEl('span', { className: 'reader-source-name', text: sourceName(article) }),
+                    ]);
+                })(),
                 viewEl('div', { className: 'reader-meta' }, [
                     author === null ? null : viewEl('span', { className: 'reader-author', text: author }),
                     viewEl('time', {

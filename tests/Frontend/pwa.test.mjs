@@ -29,15 +29,15 @@ test('le manifest PWA déclare des icônes PNG installables', () => {
 
 test('le service worker ne met jamais les routes API en cache', () => {
     const serviceWorker = readPublic('service-worker.js');
-    assert.match(serviceWorker, /rss-reader-static-v53/);
-    assert.match(readPublic('index.html'), /assets\/css\/app\.css\?v=46/);
-    assert.match(serviceWorker, /assets\/css\/app\.css\?v=46/);
+    assert.match(serviceWorker, /rss-reader-static-v54/);
+    assert.match(readPublic('index.html'), /assets\/css\/app\.css\?v=47/);
+    assert.match(serviceWorker, /assets\/css\/app\.css\?v=47/);
     assert.match(readPublic('index.html'), /assets\/js\/app\.js\?v=31/);
     assert.match(readPublic('assets/js/app.js'), /views\/articles\.js\?v=25/);
     assert.match(serviceWorker, /assets\/js\/views\/articles\.js\?v=25/);
-    assert.match(readPublic('assets/js/app.js'), /views\/reader\.js\?v=28/);
+    assert.match(readPublic('assets/js/app.js'), /views\/reader\.js\?v=29/);
     assert.match(readPublic('assets/js/app.js'), /views\/settings\.js\?v=2/);
-    assert.match(serviceWorker, /assets\/js\/views\/reader\.js\?v=28/);
+    assert.match(serviceWorker, /assets\/js\/views\/reader\.js\?v=29/);
     assert.match(readPublic('assets/js/app.js'), /router\.js\?v=25/);
     assert.match(readPublic('assets/js/views/articles.js'), /router\.js\?v=24/);
     assert.match(serviceWorker, /assets\/js\/router\.js\?v=24/);

@@ -6,7 +6,7 @@ import { SettingsView } from './views/settings.js?v=2';
 import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js';
 import { createLoginView } from './views/login.js';
 import { ArticlesView } from './views/articles.js?v=25';
-import { ReaderView } from './views/reader.js?v=28';
+import { ReaderView } from './views/reader.js?v=29';
 import { buildRoute, parseRoute } from './router.js?v=25';
 import { errorMessage, el, icon, setChildren } from './utils/dom.js';
 
