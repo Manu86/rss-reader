@@ -102,8 +102,9 @@ final readonly class FeedParser
         $content = $this->sanitizeArticleMarkup($this->childMarkup($item, 'encoded'), $contentBaseUrl);
         $title = $this->plainText($this->childText($item, 'title')) ?? 'Article sans titre';
         $imageUrl = $this->rssImage($item, $contentBaseUrl);
+        $tags = $this->rssTags($item);
 
-        return $this->article($guid, $title, $url, $author, $publishedAt, $summary, $content, $imageUrl);
+        return $this->article($guid, $title, $url, $author, $publishedAt, $summary, $content, $imageUrl, $tags);
     }
 
     private function parseAtom(DOMElement $root, string $documentUrl): ?ParsedFeed
@@ -153,9 +154,78 @@ final readonly class FeedParser
             $this->sanitizeArticleMarkup($this->atomContent($entry, 'summary'), $contentBaseUrl),
             $this->sanitizeArticleMarkup($this->atomContent($entry, 'content'), $contentBaseUrl),
             $this->atomImage($entry, $contentBaseUrl),
+            $this->atomTags($entry),
         );
     }
 
+    /** @return list<string> */
+    private function rssTags(DOMElement $item): array
+    {
+        $tags = [];
+        foreach ($this->children($item, 'category') as $category) {
+            $name = $this->tagTerm($category->textContent);
+            if ($name !== null) {
+                $tags[] = $name;
+            }
+        }
+
+        return $this->normalizeTags($tags);
+    }
+
+    /** @return list<string> */
+    private function atomTags(DOMElement $entry): array
+    {
+        $tags = [];
+        foreach ($this->children($entry, 'category') as $category) {
+            $term = $category->getAttribute('term');
+            $name = $this->tagTerm(
+                trim($term) !== '' ? $term : $category->getAttribute('label'),
+            );
+            if ($name !== null) {
+                $tags[] = $name;
+            }
+        }
+
+        return $this->normalizeTags($tags);
+    }
+
+    private function tagTerm(string $raw): ?string
+    {
+        if ($raw === '') {
+            return null;
+        }
+        $length = mb_strlen($raw, 'UTF-8');
+        if ($length > 100) {
+            return null;
+        }
+
+        return $this->plainText($raw);
+    }
+
+    /**
+     * @param list<string> $tags
+     * @return list<string>
+     */
+    private function normalizeTags(array $tags): array
+    {
+        $normalized = [];
+        foreach ($tags as $tag) {
+            $value = is_string($tag) ? trim($tag) : '';
+            if ($value === '' || in_array($value, $normalized, true)) {
+                continue;
+            }
+            $normalized[] = $value;
+            if (count($normalized) >= 10) {
+                break;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param list<string> $tags
+     */
     private function article(
         ?string $guid,
         string $title,
@@ -165,7 +235,10 @@ final readonly class FeedParser
         ?string $summary,
         ?string $content,
         ?string $imageUrl,
+        array $tags = [],
     ): ?ParsedArticle {
+        // Les tags sont normalisés ici en liste dédupliquée.
+        $normalizedTags = $this->normalizeTags($tags);
         if ($guid !== null) {
             $identity = 'guid\0' . $guid;
         } elseif ($url !== null) {
@@ -192,6 +265,7 @@ final readonly class FeedParser
             $content,
             hash('sha256', $identity),
             $imageUrl,
+            $normalizedTags,
         );
     }
 

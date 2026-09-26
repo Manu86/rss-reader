@@ -20,9 +20,11 @@ final readonly class Article
         public string $discoveredAt,
         public ?string $summary,
         public ?string $content,
-        public bool $hasImage,
-        public bool $read,
-        public bool $favorite,
+        /** @var list<string> */
+        public array $tags = [],
+        public bool $hasImage = false,
+        public bool $read = false,
+        public bool $favorite = false,
     ) {}
 
     /** @return array<string, mixed> */
@@ -49,6 +51,7 @@ final readonly class Article
             'published_at' => $this->publishedAt,
             'discovered_at' => $this->discoveredAt,
             'summary' => $this->summary,
+            'tags' => $this->tags,
             'image_url' => $this->hasImage ? '/api/articles/' . $this->id . '/image' : null,
             'is_read' => $this->read,
             'is_favorite' => $this->favorite,

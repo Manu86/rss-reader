@@ -274,7 +274,8 @@ behaves as `404`.
 
 Each list item contains the article identifier, source feed summary (including
 its nullable `category` object with `id` and `name`), title,
-original URL, author, publication/discovery dates, summary, optional controlled
+original URL, author, publication/discovery dates, summary, read-only
+`tags` array (feed-provided article tags, possibly empty), optional controlled
 `image_url`, and boolean read/favorite states. The `content` field is omitted.
 
 ### `GET /api/articles/{id}`
@@ -301,6 +302,23 @@ Both boolean fields may be supplied together. At least one is required,
 unknown fields are rejected, and CSRF protection applies. The response is the
 updated detailed article representation. A foreign or missing article returns
 `404`.
+
+## Recommendations
+
+### `GET /api/recommendations`
+
+Returns up to eight unread articles from the user's own feeds that resemble
+their recent favorites, computed only from local data (FTS match on favorite
+titles, tag and category affinity). The response is `{data: [<article>]}` with
+the same article representation as `GET /api/articles` (no pagination). The
+list is empty when the user has no favorite history. No other user's data or
+external service is involved.
+
+Optional query parameters `category_id=<id>` or
+`category=uncategorized` scope the suggestions to one owned category (or the
+virtual group). A `page` parameter is accepted and ignored because the list
+is not paginated. Unknown other fields are rejected with `422` and a foreign
+or missing category behaves as `404`.
 
 ## Search
 
@@ -444,5 +462,8 @@ accept a filesystem path or storage key from the request.
 
 ## V1 exclusions
 
-No API endpoints for public registration, email password recovery, tags,
-sharing, comments, AI features, recommendations or push notifications.
+The V1 exclusion list is owned by `PROJECT.md`. API consequences: no
+endpoints for public registration, email password recovery, user-managed
+tags, sharing, comments, AI features, cross-user or AI recommendations, or
+push notifications. Feed-sourced article tags are exposed read-only, and
+local favorite-based recommendations are exposed as described above.

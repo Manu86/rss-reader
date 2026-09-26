@@ -80,6 +80,37 @@ final class FeedParserTest extends TestCase
         self::assertStringContainsString('<li>Tâche</li>', (string) $feed->articles[0]->content);
     }
 
+    public function testArticleTagsAreParsedAndNormalized(): void
+    {
+        $rss = '<rss version="2.0">'
+            . '<channel><title>Journal</title><item><title>Article</title>'
+            . '<guid>tag-1</guid>'
+            . '<category>Tech</category><category>  </category>'
+            . '<category>Tech</category><category></category>'
+            . '<category>' . str_repeat('a', 101) . '</category>'
+            . '<category>Voyage</category>'
+            . '</item></channel></rss>';
+        $feed = $this->parser->parse($rss, 'https://feeds.test/rss.xml');
+
+        self::assertNotNull($feed);
+        self::assertSame(['Tech', 'Voyage'], $feed->articles[0]->tags);
+
+        $atom = '<feed xmlns="http://www.w3.org/2005/Atom"><title>Journal</title>'
+            . '<entry><title>Article</title><id>tag-1</id>'
+            . '<category term="Web" label="Libellé ignoré"/><category label="Seul"/></entry></feed>';
+        $atomFeed = $this->parser->parse($atom, 'https://feeds.test/atom.xml');
+
+        self::assertNotNull($atomFeed);
+        self::assertSame(['Web', 'Seul'], $atomFeed->articles[0]->tags);
+
+        $plain = '<rss version="2.0"><channel><title>Journal</title>'
+            . '<item><title>Article</title><guid>tag-2</guid></item></channel></rss>';
+        $noTags = $this->parser->parse($plain, 'https://feeds.test/rss.xml');
+
+        self::assertNotNull($noTags);
+        self::assertSame([], $noTags->articles[0]->tags);
+    }
+
     public function testDoctypeAndUnsupportedDocumentsAreRejected(): void
     {
         self::assertNull($this->parser->parse(

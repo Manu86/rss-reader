@@ -18,7 +18,14 @@ test('le CSS conserve les garanties responsive et de focus', () => {
     assert.match(css, /@keyframes\s+spin/);
     assert.match(css, /touch-action|tap-highlight|\.button/);
     assert.doesNotMatch(css, /(^|[\n;}\s])\s*:focus-visible\s*\{[^}]*outline:\s*none/);
-    assert.match(css, /\.pane-header h1\[tabindex="-1"\]:focus-visible\s*\{\s*outline:\s*none/);
+    assert.doesNotMatch(
+        css,
+        /(?:\.pane-header|\.management-view|\.settings-view) h1\[tabindex="-1"\]:focus-visible,[^.]*\{[^}]*outline:\s*(?!none)/,
+    );
+    assert.match(
+        css,
+        /(?:\.pane-header h1|\.management-view h1|\.settings-view h1)\[tabindex="-1"\]:focus[^}]*outline:\s*none/,
+    );
     assert.match(css, /\.navigation-backdrop\s*\{[^}]*display:\s*none/);
     assert.match(css, /\.navigation-open \.navigation-backdrop\s*\{\s*display:\s*block/);
     assert.match(css, /\.sidebar\s*\{[^}]*position:\s*sticky[^}]*height:\s*calc\(100dvh - 4\.5rem\)[^}]*overflow-y:\s*auto[^}]*scrollbar-gutter:\s*stable/);

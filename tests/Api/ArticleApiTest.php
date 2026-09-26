@@ -454,6 +454,159 @@ final class ArticleApiTest extends TestCase
         ))->status);
     }
 
+    public function testRecommendationsComeOnlyFromOwnUnreadArticlesAndSignalData(): void
+    {
+        $favorite = $this->insertArticle(
+            $this->aliceId,
+            $this->aliceFeedId,
+            'PHP moderne',
+            null,
+            '2026-09-24T12:00:00Z',
+            true,
+            true,
+        );
+        $matching = $this->insertArticle(
+            $this->aliceId,
+            $this->aliceFeedId,
+            'Nouvelle version de PHP publiée',
+            null,
+            '2026-09-24T13:00:00Z',
+            false,
+            false,
+        );
+        $unreadFavorite = $this->insertArticle(
+            $this->aliceId,
+            $this->aliceFeedId,
+            'PHP non lu favori',
+            null,
+            '2026-09-24T14:00:00Z',
+            false,
+            true,
+        );
+        $unrelated = $this->insertArticle(
+            $this->aliceId,
+            $this->aliceFeedId,
+            'Recette de tarte',
+            null,
+            '2026-09-24T15:00:00Z',
+            false,
+            false,
+        );
+        $bobPrivate = $this->insertArticle(
+            $this->bobId,
+            $this->bobFeedId,
+            'PHP secret privé',
+            null,
+            '2026-09-24T16:00:00Z',
+            false,
+            false,
+        );
+        [$kernel] = $this->authenticatedKernel('alice', 'correct horse battery staple');
+
+        $response = $kernel->handle(new Request('GET', '/api/recommendations'));
+        self::assertSame(200, $response->status);
+        $ids = array_map(
+            static fn(mixed $article): int => (int) $article['id'],
+            $this->decode($response)['data'],
+        );
+
+        self::assertContains($matching, $ids);
+        self::assertNotContains($favorite, $ids);
+        self::assertNotContains($unreadFavorite, $ids);
+        self::assertNotContains($unrelated, $ids);
+        self::assertNotContains($bobPrivate, $ids);
+
+        // Sans favoris de signal (historique vide), la réponse reste vide.
+        $this->pdo->exec("UPDATE articles SET is_favorite = 0 WHERE user_id = {$this->aliceId}");
+        $response = $kernel->handle(new Request('GET', '/api/recommendations'));
+        self::assertSame(200, $response->status);
+        self::assertSame([], $this->decode($response)['data']);
+
+        self::assertSame(401, (new TestApplication($this->pdo, dirname(__DIR__, 2) . '/migrations'))
+            ->kernel(new ArraySession())
+            ->handle(new Request('GET', '/api/recommendations'))->status);
+    }
+
+    public function testRecommendationsSupportCategoryScoping(): void
+    {
+        $this->insertArticle(
+            $this->aliceId,
+            $this->aliceFeedId,
+            'PHP moderne',
+            null,
+            '2026-09-24T12:00:00Z',
+            true,
+            true,
+        );
+        $inCategory = $this->insertArticle(
+            $this->aliceId,
+            $this->aliceFeedId,
+            'Nouvelle version de PHP publiée',
+            null,
+            '2026-09-24T13:00:00Z',
+            false,
+            false,
+        );
+        $withoutCategory = $this->insertArticle(
+            $this->aliceId,
+            $this->uncategorizedFeedId,
+            'Nouvelle version de PHP présentée',
+            null,
+            '2026-09-24T14:00:00Z',
+            false,
+            false,
+        );
+        $bobPrivate = $this->insertArticle(
+            $this->bobId,
+            $this->bobFeedId,
+            'Bob PHP',
+            null,
+            '2026-09-24T15:00:00Z',
+            false,
+            false,
+        );
+        [$kernel] = $this->authenticatedKernel('alice', 'correct horse battery staple');
+
+        $ids = fn(array $query): array => array_map(
+            static fn(mixed $article): int => (int) $article['id'],
+            $this->decode($kernel->handle(new Request(
+                'GET',
+                '/api/recommendations',
+                query: $query,
+            )))['data'],
+        );
+
+        self::assertContains($inCategory, $ids(['category_id' => (string) $this->techCategoryId]));
+        self::assertNotContains($withoutCategory, $ids(['category_id' => (string) $this->techCategoryId]));
+        self::assertNotContains($bobPrivate, $ids(['category_id' => (string) $this->techCategoryId]));
+
+        self::assertContains($withoutCategory, $ids(['category' => 'uncategorized']));
+        self::assertNotContains($inCategory, $ids(['category' => 'uncategorized']));
+        self::assertNotContains($bobPrivate, $ids(['category' => 'uncategorized']));
+        self::assertContains($inCategory, $ids([]));
+        self::assertContains($withoutCategory, $ids([]));
+
+        foreach ([
+            ['category_id' => '0'],
+            ['category_id' => '999999'],
+            ['category' => 'other'],
+            ['category' => 'uncategorized', 'category_id' => '1'],
+            ['unknown' => 'value'],
+        ] as $query) {
+            self::assertContains(
+                $kernel->handle(new Request('GET', '/api/recommendations', query: $query))->status,
+                [404, 422],
+            );
+        }
+
+        // L'interface transmet un marqueur de pagination ignoré ; il ne doit pas casser la réponse.
+        self::assertSame(200, $kernel->handle(new Request(
+            'GET',
+            '/api/recommendations',
+            query: ['page' => '1'],
+        ))->status);
+    }
+
     /** @return array{ApiKernel, string} */
     private function authenticatedKernel(string $username, string $password): array
     {

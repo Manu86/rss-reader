@@ -170,6 +170,21 @@ function navigationLink(label, href, count = null, current = false) {
     return link;
 }
 
+function categoryStateKey(categoryId) {
+    return categoryId === null || categoryId === undefined ? 'uncategorized' : Number(categoryId);
+}
+
+function revealArticleFeedGroup(feedId) {
+    const feed = app.feeds.find((value) => Number(value && value.id) === Number(feedId));
+    const key = categoryStateKey(feed ? feed.category_id : null);
+    if (app.openCategoryIds.size === 1 && app.openCategoryIds.has(key)) {
+        return;
+    }
+    app.openCategoryIds.clear();
+    app.openCategoryIds.add(key);
+    renderNavigation();
+}
+
 function navigationRow(label, href, categoryId, current) {
     if (!Array.isArray(app.feeds) || app.feeds.length === 0) {
         return navigationLink(label, href, null, current);
@@ -183,7 +198,8 @@ function navigationRow(label, href, categoryId, current) {
     });
     link.appendChild(el('span', {}, label));
     const listId = `navigation-feeds-${categoryId}`;
-    const open = app.openCategoryIds.has(Number(categoryId));
+    const key = categoryStateKey(categoryId);
+    const open = app.openCategoryIds.has(key);
     const toggle = el('button', {
         className: 'navigation-toggle',
         type: 'button',
@@ -194,11 +210,11 @@ function navigationRow(label, href, categoryId, current) {
             title: 'Afficher les abonnements',
         },
         onClick: () => {
-            if (app.openCategoryIds.has(categoryId)) {
+            if (app.openCategoryIds.has(key)) {
                 app.openCategoryIds.clear();
             } else {
                 app.openCategoryIds.clear();
-                app.openCategoryIds.add(categoryId);
+                app.openCategoryIds.add(key);
             }
             renderNavigation();
         },
@@ -268,6 +284,7 @@ function renderNavigation() {
         ['Non lus', buildRoute('unread'), 'unread', countFor('global', 'unread')],
         ['Lus', buildRoute('read'), 'read', countFor('global', 'read')],
         ['Favoris', buildRoute('favorites'), 'favorites', countFor('global', 'favorites')],
+        ['Recommandé', buildRoute('recommendations'), 'recommendations', null],
     ];
     setChildren(dom.mainNavigation, main.map(([label, href, name, count]) => navigationLink(
         label,
@@ -343,7 +360,8 @@ function routeUrl(route) {
     if (route.name === 'uncategorized') return buildRoute('uncategorized');
     let url;
     if (route.name === 'feed') url = buildRoute('feed', { id: route.params.id });
-    else if (route.name === 'unread' || route.name === 'read' || route.name === 'favorites') {
+    else if (route.name === 'unread' || route.name === 'read'
+        || route.name === 'favorites' || route.name === 'recommendations') {
         url = buildRoute(route.name);
     } else if (route.name === 'search') url = buildRoute('search', { q: route.query.q || '' });
     else url = buildRoute('home');
@@ -392,6 +410,15 @@ async function loadArticles(route, page = 1, activeArticleId = null, append = fa
     }
     try {
         const query = articleQuery(route, page);
+        if (!append && route.name === 'recommendations') {
+            const query = articleQuery(route, page);
+            delete query.page;
+            const response = await app.api.recommendations(query);
+            if (generation !== app.articleListGeneration) return;
+            app.articlesView.render({ data: dataOf(response) }, { ...options, page });
+            app.articleListRouteUrl = routeUrl(route);
+            return;
+        }
         const response = route.name === 'search'
             ? await app.api.searchArticles(route.query.q || '', query)
             : await app.api.listArticles(query);
@@ -446,6 +473,7 @@ async function loadArticle(id, markRead = false) {
         }
         app.readerView.render(article);
         app.articlesView.updateArticle(article);
+        revealArticleFeedGroup(article.feed_id);
     } catch (error) {
         app.readerView.renderError(error);
     }
@@ -590,13 +618,19 @@ async function openSettings() {
         user: app.user,
         onChangePassword: (value) => app.api.changePassword(value),
         onImportOpml: async (file) => { const result = await app.api.importOpml(file); await loadShell(); return result; },
+        onRefreshFeeds: async () => {
+            const result = await app.api.refreshAllFeeds();
+            await loadShell();
+            const payload = dataOf(result);
+            return { data: { ...payload, feeds: app.feeds } };
+        },
         onApplyTheme: async (theme) => {
             const response = await app.api.updateSettings({ theme });
             await applyTheme(dataOf(response).theme || theme);
             return response;
         },
     });
-    app.settingsView.render({ user: app.user });
+    app.settingsView.render({ user: app.user, feeds: app.feeds });
 }
 
 async function navigate() {

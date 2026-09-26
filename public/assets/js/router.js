@@ -32,6 +32,9 @@ function canonicalName(name) {
         favoris: 'favorites',
         favorites: 'favorites',
         favourite: 'favorites',
+        recommandations: 'recommendations',
+        recommandation: 'recommendations',
+        recommendations: 'recommendations',
         'sans-categorie': 'uncategorized',
         uncategorized: 'uncategorized',
         recherche: 'search',
@@ -145,6 +148,9 @@ export function parseRoute(hash = '') {
     if (segment === 'favoris') {
         return route('favorites', {}, categoryQuery);
     }
+    if (segment === 'recommandations') {
+        return route('recommendations', {}, categoryQuery);
+    }
     if (segment === 'sans-categorie') {
         return route('uncategorized');
     }
@@ -195,6 +201,9 @@ export function buildRoute(name = 'home', values = {}, query = {}) {
     }
     if (canonical === 'favorites') {
         return '/#/favoris';
+    }
+    if (canonical === 'recommendations') {
+        return '/#/recommandations';
     }
     if (canonical === 'uncategorized') {
         return '/#/sans-categorie';

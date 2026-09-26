@@ -18,6 +18,7 @@ const VIEW_LABELS = {
     read: 'Lus',
     favorites: 'Favoris',
     search: 'Résultats de recherche',
+    recommendations: 'Recommandé pour vous',
 };
 const FILTER_VALUES = new Set(Object.keys(VIEW_LABELS));
 const NOOP = () => {};

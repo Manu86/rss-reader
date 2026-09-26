@@ -25,7 +25,7 @@ final class MigrationTest extends TestCase
     public function testFreshDatabaseCanBeMigratedIdempotently(): void
     {
         self::assertSame(
-            ['001_initial_schema', '002_remote_action_attempts', '003_user_settings_theme'],
+            ['001_initial_schema', '002_remote_action_attempts', '003_user_settings_theme', '004_article_tags'],
             $this->migrator->migrate(),
         );
         self::assertSame([], $this->migrator->migrate());

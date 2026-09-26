@@ -264,6 +264,10 @@ export class ApiClient {
         return this.request('/search', { query: body });
     }
 
+    recommendations(query = {}) {
+        return this.request('/recommendations', { query });
+    }
+
     search(query, filters = {}) {
         return this.searchArticles(query, filters);
     }

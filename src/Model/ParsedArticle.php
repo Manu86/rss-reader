@@ -17,5 +17,7 @@ final readonly class ParsedArticle
         public ?string $content,
         public string $deduplicationHash,
         public ?string $imageUrl,
+        /** @var list<string> */
+        public array $tags = [],
     ) {}
 }

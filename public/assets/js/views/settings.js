@@ -1,5 +1,5 @@
 import { errorMessage as domErrorMessage } from '../utils/dom.js';
-import { formatNumber } from '../utils/format.js';
+import { formatDateTime, formatNumber } from '../utils/format.js';
 import {
     button,
     clear,
@@ -71,12 +71,45 @@ function userName(user) {
     return '';
 }
 
-function importValue(result) {
-    const value = dataValue(result);
-    if (value === null || typeof value !== 'object') {
-        return {};
+function refreshSummary(result) {
+    const results = Array.isArray(importValue(result).results) ? importValue(result).results : [];
+    if (results.length === 0) {
+        return 'Actualisation terminée : aucun flux à actualiser.';
     }
-    return value;
+    let success = 0;
+    let errors = 0;
+    let imported = 0;
+    results.forEach((item) => {
+        if (item !== null && typeof item === 'object' && item.status === 'error') {
+            errors += 1;
+            return;
+        }
+        success += 1;
+        imported += countValue(item && item.imported_articles);
+    });
+    return `Actualisation terminée : ${formatNumber(success)} flux à jour, ${formatNumber(imported)} article${imported > 1 ? 's' : ''} importé${imported > 1 ? 's' : ''}, ${formatNumber(errors)} échec${errors > 1 ? 's' : ''}.`;
+}
+
+function refreshState(blocks) {
+    const feeds = feedsValue(blocks).filter((feed) => feed !== null && typeof feed === 'object');
+    const latest = (values) => values.filter((item) => item !== null && item !== undefined && item !== '')
+        .map((item) => new Date(item).getTime())
+        .filter((time) => Number.isFinite(time))
+        .sort((a, b) => b - a)[0] ?? null;
+    const lastSuccess = latest(feeds.map((feed) => feed.last_successful_fetch_at));
+    const lastAttempt = latest(feeds.map((feed) => feed.last_fetch_attempt_at ?? feed.last_fetched_at));
+    return {
+        feeds,
+        total: feeds.length,
+        disabled: feeds.filter((feed) => feed.is_active === false).length,
+        errors: feeds.filter((feed) => feed.last_fetch_status === 'error').length,
+        lastSuccess,
+        lastAttempt,
+    };
+}
+
+function feedsValue(value) {
+    return Array.isArray(value) ? value : [];
 }
 
 function countValue(value) {
@@ -320,6 +353,7 @@ export class SettingsView {
         this.callbacks = { ...(values.callbacks || {}) };
         this.instanceId = `settings-${++settingsSequence}`;
         this.user = null;
+        this.feeds = [];
         this.busySection = null;
         this.pending = new Set();
         this.appliedTheme = typeof document !== 'undefined'
@@ -338,6 +372,9 @@ export class SettingsView {
                 }
                 if (Object.prototype.hasOwnProperty.call(source, 'user')) {
                     this.user = source.user;
+                }
+                if (Object.prototype.hasOwnProperty.call(source, 'feeds')) {
+                    this.feeds = feedsValue(source.feeds);
                 }
                 if (Object.prototype.hasOwnProperty.call(source, 'busySection')) {
                     this.busySection = source.busySection ?? null;
@@ -372,6 +409,7 @@ export class SettingsView {
 
         view.appendChild(this.renderAppearanceSection());
         view.appendChild(this.renderPasswordSection());
+        view.appendChild(this.renderFeedRefreshSection());
         view.appendChild(this.renderOpmlSection());
         setChildren(this.root, view);
     }
@@ -516,6 +554,66 @@ export class SettingsView {
                 className: 'button',
             }, [icon('download'), el('span', {}, 'Exporter OPML')]),
         ]));
+        return section;
+    }
+
+    renderFeedRefreshSection() {
+        const section = createSettingsSection(
+            this,
+            'Actualisation des flux',
+            'Vos flux sont récupérés automatiquement par le serveur une fois par jour. Vous pouvez l’effectuer manuellement ici.',
+        );
+        const callback = this.callbacks.onRefreshFeeds;
+        const form = el('form', { className: 'settings-form', novalidate: true });
+        const infoBox = el('div', {});
+        const renderInfo = () => {
+            const state = refreshState(this.feeds);
+            setChildren(infoBox, []);
+            if (state.total > 0) {
+                const details = el('dl', { className: 'management-details' });
+                const row = (label, value) => {
+                    details.appendChild(el('dt', {}, label));
+                    details.appendChild(el('dd', {}, value));
+                };
+                row('Flux suivis', `${formatNumber(state.total)}${state.disabled > 0 ? ` (${formatNumber(state.disabled)} désactivé${state.disabled > 1 ? 's' : ''})` : ''}`);
+                row('Flux en erreur', formatNumber(state.errors));
+                row('Dernière récupération réussie', state.lastSuccess === null ? 'Jamais' : formatDateTime(state.lastSuccess));
+                row('Dernière tentative', state.lastAttempt === null ? 'Jamais' : formatDateTime(state.lastAttempt));
+                infoBox.appendChild(details);
+            } else {
+                infoBox.appendChild(el('p', { className: 'settings-section-description' }, 'Aucun flux suivi pour le moment.'));
+            }
+        };
+        renderInfo();
+        const refreshButton = button('Actualiser les flux', {
+            type: 'submit',
+            className: 'button button-primary',
+            icon: 'refresh',
+            disabled: typeof callback !== 'function',
+        });
+        form.appendChild(statusNode());
+        form.appendChild(messageNode());
+        form.appendChild(el('div', { className: 'form-actions' }, [refreshButton]));
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await runSection(
+                this,
+                'feed-refresh',
+                form,
+                () => callback(),
+                (result) => {
+                    const value = importValue(result);
+                    if (Array.isArray(value.feeds)) {
+                        this.feeds = value.feeds;
+                        renderInfo();
+                    }
+                    return refreshSummary(result);
+                },
+                'Actualisation terminée.',
+            );
+        });
+        section.appendChild(form);
+        section.appendChild(infoBox);
         return section;
     }
 

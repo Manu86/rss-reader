@@ -117,6 +117,7 @@ published_at NULL
 discovered_at
 summary NULL
 content NULL
+tags NULL
 image_path NULL
 is_read
 is_favorite
@@ -135,7 +136,10 @@ Rules:
 -   article and feed must belong to the same user;
 -   `(feed_id, deduplication_hash)` is unique;
 -   `discovered_at` is set on first import and remains stable;
--   synchronization must not reset `is_read` or `is_favorite`.
+-   synchronization must not reset `is_read` or `is_favorite`;
+-   `tags` stores the feed-provided article tags as a JSON array of
+    non-empty strings (duplicates removed, at most 10 tags of at most
+    100 characters each); the value is `NULL` when the item has no tag.
 
 Default ordering:
 
@@ -229,6 +233,8 @@ Store migrations under `migrations/`, for example:
 ``` text
 001_initial_schema.sql
 002_articles_fts.sql
+003_user_settings_theme.sql
+004_article_tags.sql
 ```
 
 Track applied versions in a migration table.

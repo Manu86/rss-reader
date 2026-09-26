@@ -11,6 +11,7 @@ use App\Controller\FeedController;
 use App\Controller\FeedDiscoveryController;
 use App\Controller\MediaController;
 use App\Controller\OpmlController;
+use App\Controller\RecommendationController;
 use App\Controller\SettingsController;
 use App\Exception\ApiException;
 use App\Security\CsrfTokenManager;
@@ -22,6 +23,7 @@ final readonly class ApiKernel
         private AuthController $auth,
         private CategoryController $categories,
         private ArticleController $articles,
+        private RecommendationController $recommendations,
         private FeedController $feeds,
         private FeedDiscoveryController $feedDiscovery,
         private MediaController $media,
@@ -83,6 +85,7 @@ final readonly class ApiKernel
             'POST /api/categories' => $this->categories->create($request),
             'GET /api/articles' => $this->articles->index($request),
             'GET /api/search' => $this->articles->search($request),
+            'GET /api/recommendations' => $this->recommendations->index($request),
             'GET /api/counts' => $this->articles->counts(),
             'GET /api/feeds' => $this->feeds->index($request),
             'POST /api/feeds' => $this->feeds->create($request),

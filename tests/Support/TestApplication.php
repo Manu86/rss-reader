@@ -11,6 +11,7 @@ use App\Controller\FeedController;
 use App\Controller\FeedDiscoveryController;
 use App\Controller\MediaController;
 use App\Controller\OpmlController;
+use App\Controller\RecommendationController;
 use App\Controller\SettingsController;
 use App\Database\Migrator;
 use App\Database\TransactionManager;
@@ -50,6 +51,7 @@ use App\Service\MediaCleanupService;
 use App\Service\OpmlExporter;
 use App\Service\OpmlImportService;
 use App\Service\OpmlParser;
+use App\Service\RecommendationService;
 use App\Service\RemoteMediaService;
 use App\Service\UserService;
 use App\Service\UserSettingsService;
@@ -170,6 +172,7 @@ final readonly class TestApplication
                 new FtsQueryBuilder(),
                 $clock,
             ), $currentUser),
+            new RecommendationController(new RecommendationService($articleRepository, $categoryRepository), $currentUser),
             $feedController,
             $feedDiscoveryController,
             new MediaController($feedRepository, $articleRepository, $this->mediaStorage, $currentUser),

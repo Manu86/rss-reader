@@ -173,6 +173,26 @@ scripts or SDKs:
 -   Sharing is hidden for articles without a usable original link;
 -   No tracking pixels, counters or social SDK requests are made.
 
+## Article tags
+
+The reader displays feed-provided article tags at the bottom of the
+article, after the content and before the external link and sharing:
+
+-   The tags come from the read-only `tags` field of the article API
+    response;
+-   Tags render as small rounded chips with a tag icon, without
+    color-only meaning;
+-   Articles without tags display nothing in their place;
+-   Tags are not interactive: they do not filter, search or link.
+
+## Recommendations
+
+The main navigation menu has a `Recommandé` item (`/#/recommandations`)
+opening a dedicated view that lists the backend suggestions as normal article
+cards: unread articles computed by the recommendation endpoint. With no
+suggestion, the view shows the standard empty state. Opening an article from
+the view keeps a working back navigation to the list.
+
 ## Filters and search
 
 The frontend exposes:

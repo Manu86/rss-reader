@@ -125,6 +125,22 @@ Textual updates may update safe remote fields if implementation chooses
 a deterministic policy, but must not change article identity or local
 user state.
 
+## Article tags
+
+Feed-provided article tags are imported and stored per article:
+
+-   RSS: the `category` item elements;
+-   Atom: the `category` entry elements (`term`, falling back to `label`).
+
+Rules:
+
+-   tags are plain text, sanitized like other feed text;
+-   duplicates and empty values are removed;
+-   at most 10 tags per article, at most 100 characters each;
+-   missing or invalid tags never block article import;
+-   tags are display-only data and are not used for filtering, search
+    or article identity in V1.
+
 ## Dates
 
 Keep separate:

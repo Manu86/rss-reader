@@ -150,6 +150,29 @@ Remote HTML is untrusted and must follow `SECURITY.md`.
 
 A link opens the original article.
 
+## Recommendations
+
+A `Recommandé` entry in the main navigation opens a dedicated view listing
+up to eight unread article suggestions:
+
+- computed server-side from the user's own reading history only;
+- signals: FTS similarity between candidate articles and the titles of the
+  user's recent favorites, plus shared tags/categories between candidates and
+  favorites;
+- candidates are unread articles of the user's own feeds, never favorited
+  already, never other users' articles;
+- no AI, no external service, no cross-user data;
+- the view shows the standard empty state when the user has no favorite
+  history.
+
+## Article tags
+
+Feed-provided article tags (RSS `category`, Atom `category` term/label) are
+imported when valid: sanitized, deduplicated, at most 10 per article and 100
+characters each. They are displayed as non-interactive chips at the bottom of
+the article in the reader. Tags are not user-managed and are not used by
+filters or search.
+
 ## Images and favicons
 
 When available, primary article images and feed favicons are downloaded and

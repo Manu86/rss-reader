@@ -157,6 +157,7 @@ export class ManagementView {
             feeds: undefined,
             categories: undefined,
             busyFeedId: null,
+            categoryFilter: 'all',
         };
         this.activeTab = 'feeds';
         this.pending = new Set();
@@ -205,7 +206,6 @@ export class ManagementView {
             el('h1', { id: headingId }, 'Gérer les flux'),
         ]);
         header.appendChild(heading);
-        header.appendChild(this.renderHeaderActions());
         view.appendChild(header);
 
         if (this.error) {
@@ -230,6 +230,10 @@ export class ManagementView {
         tabList.appendChild(feedTab);
         tabList.appendChild(categoryTab);
         view.appendChild(tabList);
+        const actions = this.renderHeaderActions();
+        if (actions.childElementCount > 0) {
+            view.appendChild(actions);
+        }
 
         const feedPanel = el('div', {
             id: feedPanelId,
@@ -312,16 +316,45 @@ export class ManagementView {
                 disabled: this.isPending('refresh-all') || this.isAllBusy() || typeof refreshCallback !== 'function',
                 onClick: () => this.runAction('refresh-all', refreshCallback),
             }));
-        } else {
-            const addCallback = callbackFor(this.callbacks, 'onAddCategory');
-            actions.appendChild(button('Ajouter une catégorie', {
-                className: 'button button-primary',
-                icon: 'plus',
-                disabled: this.isPending('add-category') || typeof addCallback !== 'function',
-                onClick: () => this.runAction('add-category', addCallback),
-            }));
         }
         return actions;
+    }
+
+    filteredFeeds() {
+        const feeds = listValue(this.state.feeds);
+        const filter = textValue(this.state.categoryFilter, 'all');
+        if (filter === 'all') {
+            return feeds;
+        }
+        return feeds.filter((feed) => idKey(feed && feed.category_id)
+            === (filter === 'uncategorized' ? '' : idKey(filter)));
+    }
+
+    renderFeedCategoryFilter(id) {
+        const categories = listValue(this.state.categories)
+            .filter((category) => idKey(category && category.id) !== '')
+            .map((category) => ({
+                value: idKey(category && category.id),
+                label: textValue(category && category.name, 'Catégorie sans nom'),
+            }));
+        const select = el('select', {
+            id,
+            className: 'management-filter-select',
+            value: textValue(this.state.categoryFilter, 'all'),
+        });
+        [
+            { value: 'all', label: 'Toutes les catégories' },
+            { value: 'uncategorized', label: 'Sans catégorie' },
+            ...categories,
+        ].forEach((option) => select.appendChild(el('option', {
+            value: option.value,
+            text: option.label,
+            selected: option.value === textValue(this.state.categoryFilter, 'all'),
+        })));
+        return el('div', { className: 'management-filter' }, [
+            el('label', { className: 'management-filter-label', htmlFor: id, text: 'Filtrer par catégorie' }),
+            select,
+        ]);
     }
 
     renderFeedsPanel() {
@@ -344,8 +377,17 @@ export class ManagementView {
         }
 
         panel.appendChild(el('p', { className: 'panel-summary' }, `${formatNumber(this.state.feeds.length)} flux`));
+        const filterControl = this.renderFeedCategoryFilter(`${this.instanceId}-category-filter`);
         const list = el('ul', { className: 'management-list feed-list', 'aria-label': 'Liste des flux' });
-        this.state.feeds.forEach((feed) => list.appendChild(this.renderFeed(feed)));
+        const refreshList = () => {
+            setChildren(list, this.filteredFeeds().map((feed) => this.renderFeed(feed)));
+        };
+        refreshList();
+        filterControl.querySelector('select').addEventListener('change', (event) => {
+            this.state.categoryFilter = event.target.value;
+            refreshList();
+        });
+        panel.appendChild(filterControl);
         panel.appendChild(list);
         return panel;
     }
@@ -487,7 +529,7 @@ export class ManagementView {
         }
         const header = el('div', { className: 'management-item-header' }, [
             el('div', { className: 'management-item-title-wrap' }, [
-                icon('folder', { className: 'category-icon', label: '' }),
+                icon('folder', { className: 'icon category-icon', label: '' }),
                 el('span', { className: 'management-item-title' }, name),
             ]),
             el('span', { className: 'status-badge' }, `${formatNumber(feeds.length)} flux`),

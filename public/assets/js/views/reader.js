@@ -639,6 +639,28 @@ function renderShareButton(article) {
     return viewEl('div', { className: 'reader-share' }, children);
 }
 
+function articleTagList(article) {
+    const value = isObject(article) ? article : {};
+    const raw = Array.isArray(value.tags) ? value.tags : [];
+    const tags = [];
+    raw.forEach((tag) => {
+        const text = nonEmpty(tag) ? textValue(tag).trim() : '';
+        if (text !== '' && !tags.includes(text)) {
+            tags.push(text);
+        }
+    });
+    if (tags.length === 0) {
+        return null;
+    }
+    return viewEl('div', {
+        className: 'reader-tags',
+        attrs: { 'aria-label': 'Sujets de l’article' },
+    }, tags.map((tag) => viewEl('span', { className: 'reader-tag' }, [
+        viewIcon('tag', 'reader-tag-icon'),
+        viewEl('span', { text: tag }),
+    ])));
+}
+
 function renderBackButton(onBack) {
     return viewButton('Retour', {
         className: 'reader-back-button button',
@@ -936,6 +958,7 @@ export class ReaderView {
             bodyChildren.push(image);
         }
         bodyChildren.push(renderArticleContent(contentText));
+        bodyChildren.push(articleTagList(article));
         bodyChildren.push(renderExternalLink(article));
         bodyChildren.push(renderShareButton(article));
 

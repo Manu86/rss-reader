@@ -20,9 +20,9 @@ final readonly class ArticleRepository
         $statement = $this->pdo->prepare(
             'INSERT OR IGNORE INTO articles '
             . '(user_id, feed_id, guid, guid_hash, title, url, author, published_at, '
-            . 'discovered_at, summary, content, deduplication_hash, created_at, updated_at) '
+            . 'discovered_at, summary, content, tags, deduplication_hash, created_at, updated_at) '
             . 'VALUES (:user_id, :feed_id, :guid, :guid_hash, :title, :url, :author, '
-            . ':published_at, :discovered_at, :summary, :content, :deduplication_hash, '
+            . ':published_at, :discovered_at, :summary, :content, :tags, :deduplication_hash, '
             . ':created_at, :updated_at)'
         );
         $missingImage = $this->pdo->prepare(
@@ -32,7 +32,7 @@ final readonly class ArticleRepository
         $updateExisting = $this->pdo->prepare(
             'UPDATE articles SET title = :title, url = :url, author = :author, '
             . 'published_at = :published_at, summary = :summary, content = :content, '
-            . 'updated_at = :updated_at WHERE user_id = :user_id AND feed_id = :feed_id '
+            . 'tags = :tags, updated_at = :updated_at WHERE user_id = :user_id AND feed_id = :feed_id '
             . 'AND deduplication_hash = :deduplication_hash'
         );
         $inserted = 0;
@@ -51,6 +51,7 @@ final readonly class ArticleRepository
                 'discovered_at' => $discoveredAt,
                 'summary' => $article->summary,
                 'content' => $article->content,
+                'tags' => $article->tags === [] ? null : json_encode(array_values($article->tags), JSON_UNESCAPED_UNICODE),
                 'deduplication_hash' => $article->deduplicationHash,
                 'created_at' => $discoveredAt,
                 'updated_at' => $discoveredAt,
@@ -86,6 +87,7 @@ final readonly class ArticleRepository
                     'published_at' => $article->publishedAt,
                     'summary' => $article->summary,
                     'content' => $article->content,
+                    'tags' => $article->tags === [] ? null : json_encode(array_values($article->tags), JSON_UNESCAPED_UNICODE),
                     'updated_at' => $discoveredAt,
                     'user_id' => $userId,
                     'feed_id' => $feedId,
@@ -258,6 +260,34 @@ final readonly class ArticleRepository
         return $this->findOwned($articleId, $userId);
     }
 
+    /**
+     * @return list<array{id: int, title: string, tags: list<string>, category_id: int|null}>
+     */
+    public function listFavoriteSignals(int $userId, int $limit): array
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT a.id, a.title, a.tags, f.category_id FROM articles a '
+            . 'INNER JOIN feeds f ON f.id = a.feed_id AND f.user_id = a.user_id '
+            . 'WHERE a.user_id = :user_id AND a.is_favorite = 1 '
+            . 'ORDER BY a.updated_at DESC, a.id DESC LIMIT :limit'
+        );
+        $statement->bindValue(':user_id', $userId, PDO::PARAM_INT);
+        $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $statement->execute();
+
+        $signals = [];
+        while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+            $signals[] = [
+                'id' => (int) $row['id'],
+                'title' => (string) $row['title'],
+                'tags' => $this->decodeTags($row['tags'] ?? null),
+                'category_id' => $row['category_id'] === null ? null : (int) $row['category_id'],
+            ];
+        }
+
+        return $signals;
+    }
+
     /** @return array{string, array<string, int>} */
     private function listWhere(int $userId, ArticleListCriteria $criteria): array
     {
@@ -298,7 +328,7 @@ final readonly class ArticleRepository
         return 'SELECT a.id, a.feed_id, f.name AS feed_name, f.favicon_path AS feed_favicon_path, '
             . 'c.id AS category_id, c.name AS category_name, '
             . 'a.title, a.url, a.author, a.published_at, a.discovered_at, a.summary, a.content, '
-            . 'a.image_path, a.is_read, a.is_favorite';
+            . 'a.tags, a.image_path, a.is_read, a.is_favorite';
     }
 
     private function hydrate(mixed $row): ?Article
@@ -321,9 +351,42 @@ final readonly class ArticleRepository
             (string) $row['discovered_at'],
             $row['summary'] === null ? null : (string) $row['summary'],
             $row['content'] === null ? null : (string) $row['content'],
+            $this->decodeTags($row['tags'] ?? null),
             $row['image_path'] !== null,
             (bool) $row['is_read'],
             (bool) $row['is_favorite'],
         );
+    }
+
+    /** @return list<string> */
+    private function decodeTags(mixed $value): array
+    {
+        if ($value === null || !is_string($value) || $value === '') {
+            return [];
+        }
+        try {
+            $decoded = json_decode($value, true, 3, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+        if (!is_array($decoded)) {
+            return [];
+        }
+        $tags = [];
+        foreach ($decoded as $tag) {
+            if (!is_string($tag)) {
+                continue;
+            }
+            $text = trim($tag);
+            if ($text === '' || strlen($text) > 100 || in_array($text, $tags, true)) {
+                continue;
+            }
+            $tags[] = $text;
+            if (count($tags) >= 10) {
+                break;
+            }
+        }
+
+        return $tags;
     }
 }
