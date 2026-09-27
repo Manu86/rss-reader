@@ -50,6 +50,9 @@ h1, h2, p { margin-top: 0; }
 .field { display: grid; gap: .4rem; }
 .field label, .field legend { font-weight: 600; }
 .field input, .field select { width: 100%; min-height: 2.75rem; padding: .55rem .7rem; color: var(--ink); background: #fff; border: 1px solid #bbc7d0; border-radius: .45rem; }
+.password-control { display: flex; align-items: stretch; gap: .45rem; }
+.password-control input { min-width: 0; }
+.password-toggle { flex: 0 0 auto; min-height: 2.75rem; white-space: nowrap; }
 .field input:focus, .field select:focus { border-color: var(--accent); outline: 3px solid var(--accent-soft); }
 .field-hint, .field-error { margin: 0; color: var(--muted); font-size: .875rem; }
 .field-error, .form-error { color: var(--danger); }

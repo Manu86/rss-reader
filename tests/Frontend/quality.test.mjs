@@ -99,6 +99,7 @@ test('le HTML associe les labels statiques à des contrôles existants', () => {
         html,
         /<input id="login-remember" name="remember" type="checkbox">\s*<label for="login-remember">Se souvenir de moi<\/label>/,
     );
+    assert.match(html, /id="login-password-toggle"[^>]+type="button"[^>]+aria-controls="login-password"/);
     assert.doesNotMatch(html, /id="login-remember"[^>]*checked/);
     const articlesView = read('assets/js/views/articles.js');
     assert.match(articlesView, /VIEW_LABELS\s*=\s*\{[^}]*recommendations:/);

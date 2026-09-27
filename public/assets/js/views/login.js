@@ -46,12 +46,26 @@ export function createLoginView(options = {}) {
     const form = requiredElement(root, 'login-form');
     const username = requiredElement(root, 'login-username');
     const password = requiredElement(root, 'login-password');
+    const passwordToggle = elementById(root, 'login-password-toggle');
     const remember = requiredElement(root, 'login-remember');
     const submit = requiredElement(root, 'login-submit');
     const error = requiredElement(root, 'login-error');
     const notice = requiredElement(root, 'login-notice');
     let busy = false;
     let destroyed = false;
+
+    const setPasswordVisibility = (visible) => {
+        password.type = visible ? 'text' : 'password';
+        if (passwordToggle) {
+            passwordToggle.textContent = visible ? 'Masquer' : 'Afficher';
+            passwordToggle.setAttribute('aria-label', visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe');
+            passwordToggle.setAttribute('aria-pressed', String(visible));
+        }
+    };
+
+    const togglePasswordVisibility = () => {
+        setPasswordVisibility(password.type === 'password');
+    };
 
     const clearError = () => {
         error.textContent = '';
@@ -93,6 +107,9 @@ export function createLoginView(options = {}) {
         busy = value;
         username.disabled = value;
         password.disabled = value;
+        if (passwordToggle) {
+            passwordToggle.disabled = value;
+        }
         remember.disabled = value;
         setButtonBusy(submit, value, 'Connexion…');
     };
@@ -132,6 +149,8 @@ export function createLoginView(options = {}) {
 
     form.addEventListener('submit', handleSubmit);
     form.addEventListener('input', clearError);
+    passwordToggle?.addEventListener('click', togglePasswordVisibility);
+    setPasswordVisibility(false);
 
     if (Object.prototype.hasOwnProperty.call(options, 'message')) {
         setMessage(message);
@@ -157,6 +176,7 @@ export function createLoginView(options = {}) {
             destroyed = true;
             form.removeEventListener('submit', handleSubmit);
             form.removeEventListener('input', clearError);
+            passwordToggle?.removeEventListener('click', togglePasswordVisibility);
         },
     });
 }

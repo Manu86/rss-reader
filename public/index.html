@@ -133,11 +133,14 @@
         <form id="login-form" class="stack-form">
             <div class="field">
                 <label for="login-username">Nom d’utilisateur</label>
-                <input id="login-username" name="username" type="text" autocomplete="username" required autofocus>
+                <input id="login-username" name="username" type="text" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required autofocus>
             </div>
             <div class="field">
                 <label for="login-password">Mot de passe</label>
-                <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+                <div class="password-control">
+                    <input id="login-password" name="password" type="password" autocomplete="current-password" autocapitalize="none" autocorrect="off" spellcheck="false" required>
+                    <button id="login-password-toggle" class="button button-small password-toggle" type="button" aria-controls="login-password" aria-pressed="false">Afficher</button>
+                </div>
             </div>
             <div class="field field-checkbox">
                 <input id="login-remember" name="remember" type="checkbox">
