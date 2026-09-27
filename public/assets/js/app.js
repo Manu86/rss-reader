@@ -388,16 +388,34 @@ function renderNavigation() {
         const currentListRoute = route.name === 'article'
             ? parseRoute(route.query.from || '#/')
             : route;
-        const options = [
-            Object.assign(document.createElement('option'), { value: 'all', textContent: 'Toutes les catégories' }),
-            Object.assign(document.createElement('option'), { value: 'uncategorized', textContent: 'Sans catégorie' }),
-            ...app.categories.map((category) => Object.assign(document.createElement('option'), {
-                value: String(category.id),
-                textContent: category.name,
-            })),
-        ];
+        const categoryPage = currentListRoute.name === 'category' || currentListRoute.name === 'uncategorized';
+        const categoryId = currentListRoute.name === 'category'
+            ? Number(currentListRoute.params.id)
+            : null;
+        const feeds = app.feeds.filter((feed) => categoryPage && (
+            categoryId === null ? feed.category_id === null : Number(feed.category_id) === categoryId
+        ));
+        const options = categoryPage
+            ? [
+                Object.assign(document.createElement('option'), { value: 'all', textContent: 'Toutes les sources' }),
+                ...feeds.map((feed) => Object.assign(document.createElement('option'), {
+                    value: String(feed.id),
+                    textContent: feed.name,
+                })),
+            ]
+            : [
+                Object.assign(document.createElement('option'), { value: 'all', textContent: 'Toutes les catégories' }),
+                Object.assign(document.createElement('option'), { value: 'uncategorized', textContent: 'Sans catégorie' }),
+                ...app.categories.map((category) => Object.assign(document.createElement('option'), {
+                    value: String(category.id),
+                    textContent: category.name,
+                })),
+            ];
         setChildren(dom.articleCategoryFilter, options);
-        dom.articleCategoryFilter.value = selectedCategory(currentListRoute);
+        dom.articleCategoryFilter.previousElementSibling.textContent = categoryPage ? 'Source' : 'Catégorie';
+        dom.articleCategoryFilter.value = categoryPage
+            ? (currentListRoute.name === 'feed' ? String(currentListRoute.params.id) : 'all')
+            : selectedCategory(currentListRoute);
     }
 }
 
@@ -461,9 +479,8 @@ function selectedCategory(route) {
 
 function categoryFilterUrl(route, selection) {
     if (route.name === 'category' || route.name === 'uncategorized') {
-        if (selection === 'all') return buildRoute('home');
-        if (selection === 'uncategorized') return buildRoute('uncategorized');
-        return buildRoute('category', { id: selection });
+        if (selection === 'all') return routeUrl(route);
+        return buildRoute('feed', { id: selection });
     }
     const baseRoute = { ...route, query: { ...(route.query || {}) } };
     delete baseRoute.query.category_id;
