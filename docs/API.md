@@ -40,6 +40,17 @@ Use correct HTTP statuses (`200`, `201`, `204`, `400`, `401`, `404`,
 
 ## Authentication
 
+Authentication is session based. Before dispatching, the kernel reopens the
+session from a valid "remember me" cookie when the current session is not
+already authenticated, so a session that timed out does not require a new
+password entry. The restore regenerates the session identifier, and the
+client transparently retries once with a refreshed CSRF token when the
+restored session invalidates the one it held.
+
+`POST /api/auth/login` and `POST /api/auth/logout` are excluded from that
+restore: explicit credentials must always win, and logout must not resurrect
+the state it is closing.
+
 ### `GET /api/auth/csrf`
 
 Starts or resumes the same-origin session and returns its CSRF token:
@@ -55,15 +66,23 @@ login and password change.
 ### `POST /api/auth/login`
 
 ``` json
-{"username":"user","password":"secret"}
+{"username":"user","password":"secret","remember":false}
 ```
 
 Creates the server-side session and returns the authenticated user plus
 the rotated CSRF token. Repeated failures are rate limited with `429`.
 
+`remember` is optional and defaults to `false`; it must be a boolean when
+present, otherwise the request fails with `422` and a `remember` field error.
+When true, the response also sets a `Set-Cookie` header for the "remember me"
+cookie; when false, it explicitly clears it and deletes any token already
+stored for the presenting cookie. The token value is never returned in the
+body.
+
 ### `POST /api/auth/logout`
 
-Invalidates the session.
+Invalidates the session, deletes the presented "remember me" token and clears
+its cookie.
 
 ### `GET /api/auth/me`
 
@@ -268,7 +287,7 @@ List responses should avoid returning full article content when
 unnecessary.
 
 The default `per_page` value comes from the authenticated user's settings.
-Allowed values are `10`, `25`, `50` and `100`. Invalid filters and pagination
+Allowed values are `10`, `25`, `50` and `100`. Invalid filters and batch-loading
 values return `422`. A referenced category or feed owned by another user
 behaves as `404`.
 
@@ -308,27 +327,29 @@ updated detailed article representation. A foreign or missing article returns
 ### `GET /api/recommendations`
 
 Returns up to twenty-four unread articles from the user's own feeds that resemble
-their recent favorites, computed only from local data (weighted FTS match
-against favorite titles and tags, plus affinity for shared tags and categories).
+their recent favorites. The 24 articles are selected randomly from the 48 best
+eligible suggestions, computed only from local data (weighted FTS match against
+favorite titles and tags, plus affinity for shared tags and categories). Recent
+articles receive a small progressive freshness bonus, capped at one point over
+30 days.
 The response is `{data: [<article>]}` with the same article representation as
-`GET /api/articles` (no pagination). The list is empty when the user has no
-favorite history or no relevant unread candidates exist. The order applies a
-small bounded random jitter on the final score, so repeated calls may return
-the same articles in a different order. No other user's data or external
+`GET /api/articles` and is returned in one response. The list is empty when the user has no
+favorite history or no relevant unread candidates exist. Repeated calls may
+return different articles from the pool. No other user's data or external
 service is involved.
 
 Optional query parameters `category_id=<id>` or
 `category=uncategorized` scope the suggestions to one owned category (or the
 virtual group). A `page` parameter is accepted and ignored because the list
-is not paginated. Unknown other fields are rejected with `422` and a foreign
+is returned in one response. Unknown other fields are rejected with `422` and a foreign
 or missing category behaves as `404`.
 
 ## Search
 
 ### `GET /api/search?q=php`
 
-The response uses the same compact article representation and `pagination`
-object as `GET /api/articles`. Optional parameters are `filter`, `category_id`,
+The response uses the same compact article representation and load metadata as
+`GET /api/articles`. Optional parameters are `filter`, `category_id`,
 `category=uncategorized`, `feed_id`, `page` and `per_page`, with the same
 validation and ownership rules as the article list.
 

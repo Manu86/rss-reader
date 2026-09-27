@@ -28,6 +28,18 @@ test('le CSS conserve les garanties responsive et de focus', () => {
     );
     assert.match(css, /\.navigation-backdrop\s*\{[^}]*display:\s*none/);
     assert.match(css, /\.navigation-open \.navigation-backdrop\s*\{\s*display:\s*block/);
+    assert.doesNotMatch(css, /\.navigation-sublist\s*\{[^}]*border-left/);
+    assert.doesNotMatch(css, /\.navigation-sublist\s*\{[^}]*margin-left/);
+    assert.doesNotMatch(css, /\.navigation-sublist \.navigation-link\s*\{[^}]*font-size/);
+    assert.match(css, /\.article-card-topline, \.article-card-meta, \.navigation-feed-source\s*\{[^}]*gap:\s*\.4rem[^}]*font-size:\s*\.78rem/);
+    assert.match(css, /\.navigation-favicon\s*\{\s*flex:\s*0 0 1\.25rem/);
+    assert.match(css, /\.navigation-feed-link\s*\{[^}]*justify-content:\s*flex-start/);
+    assert.match(css, /\.navigation-toggle\s*\{[^}]*width:\s*1\.85rem[^}]*height:\s*1\.85rem[^}]*border:\s*1px solid transparent/);
+    assert.match(css, /\.navigation-toggle:hover:not\(:focus-visible\)\s*\{[^}]*border-color:\s*var\(--accent\)/);
+    assert.match(css, /\.article-list-footer\s*\{[^}]*display:\s*flex[^}]*justify-content:\s*center/);
+    assert.match(css, /\.article-list-footer-button\s*\{\s*max-width:\s*22rem/);
+    assert.match(read('assets/js/app.js'), /function feedNavigationLink\(feed, current\)/);
+    assert.match(read('assets/js/app.js'), /navigationFavicon\(feed\)/);
     assert.match(css, /\.sidebar\s*\{[^}]*position:\s*sticky[^}]*height:\s*calc\(100dvh - 4\.5rem\)[^}]*overflow-y:\s*auto[^}]*scrollbar-gutter:\s*stable/);
     assert.match(css, /@media\s*\(max-width:\s*70rem\)[\s\S]*\.sidebar\s*\{[^}]*position:\s*fixed[^}]*height:\s*100dvh[^}]*overflow-y:\s*auto/);
     assert.match(css, /\.article-card-content:has\(\.article-thumbnail\)\s*\{[^}]*grid-template-columns:\s*5\.5rem\s+minmax[^}]*grid-template-rows:\s*auto auto auto/);
@@ -38,7 +50,7 @@ test('le CSS conserve les garanties responsive et de focus', () => {
     assert.match(css, /\.article-list-feed-actions\s*\{[^}]*display:\s*flex[^}]*margin-top:\s*\.65rem/);
     assert.match(css, /\.article-list-pane\s*\{[^}]*position:\s*sticky[^}]*height:\s*calc\(100dvh - 4\.5rem\)[^}]*overflow:\s*hidden/);
     assert.match(css, /\.article-list-scroll\s*\{[^}]*min-height:\s*0[^}]*overflow-y:\s*auto[^}]*scrollbar-gutter:\s*stable/);
-    assert.match(css, /\.article-source-name\s*\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap/);
+    assert.match(css, /\.article-source-name, \.navigation-feed-name\s*\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap/);
     assert.match(css, /\.article-favicon\s*\{[^}]*flex:\s*0 0 1\.25rem/);
     assert.match(css, /\.article-category-tag\s*\{[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap/);
     assert.match(css, /\.infinite-scroll-sentinel\s*\{[^}]*display:\s*flex[^}]*min-height:\s*3\.5rem/);
@@ -82,6 +94,24 @@ test('le HTML associe les labels statiques à des contrôles existants', () => {
     assert.match(html, /id="article-list-scroll"[^>]+role="region"[^>]+tabindex="0"/);
     assert.match(html, /id="article-list-scroll"[\s\S]*?<header class="pane-header">[\s\S]*?id="article-list"/);
     assert.doesNotMatch(html, /id="article-pagination"/);
+    assert.match(html, /id="article-list-footer" class="article-list-footer" hidden/);
+    assert.match(
+        html,
+        /<input id="login-remember" name="remember" type="checkbox">\s*<label for="login-remember">Se souvenir de moi<\/label>/,
+    );
+    assert.doesNotMatch(html, /id="login-remember"[^>]*checked/);
+    const articlesView = read('assets/js/views/articles.js');
+    assert.match(articlesView, /VIEW_LABELS\s*=\s*\{[^}]*recommendations:/);
+    assert.match(articlesView, /context\.filter !== 'recommendations'/);
+    assert.match(articlesView, /buildRoute\('unread'\)/);
+});
+
+test('le bloc de titre de la connexion respire verticalement', () => {
+    const css = read('assets/css/app.css');
+    const brand = read('index.html').match(/<div class="auth-brand">/);
+    assert.ok(brand, 'le bloc de titre de la connexion est absent');
+    assert.match(css, /\.auth-brand\s*\{[^}]*padding:\s*2\.25rem 1rem/);
+    assert.match(css, /\.auth-brand\s*\{[^}]*background:\s*var\(--accent-soft\)/);
 });
 
 test('les interactions essentielles exposent un comportement clavier et des noms accessibles', () => {
@@ -98,6 +128,8 @@ test('les interactions essentielles exposent un comportement clavier et des noms
     assert.match(app, /const navigationRoute = route\.name === 'article'[\s\S]*parseRoute\(route\.query\.from \|\| '#\/'\)/);
     assert.match(app, /navigationRoute\.name === name/);
     assert.match(app, /\['Tous', buildRoute\('home'\), 'home', countFor\('global', 'all'\)\]/);
+    assert.match(app, /revealArticleFeedGroup\(articleFeedOf\(article\)\)/);
+    assert.doesNotMatch(app, /article\.feed_id/);
     assert.match(login, /setAttribute\('aria-describedby', 'login-error'\)/);
 });
 
@@ -136,6 +168,7 @@ test('les cartes de liste ne rendent pas les résumés d’article', () => {
     assert.doesNotMatch(cardSource, /Non lu|Lu/);
     assert.doesNotMatch(cardSource, /article-favorite|Ajouter aux favoris|Retirer des favoris/);
     assert.match(articles, /article-thumbnail-placeholder/);
+    assert.match(articles, /isLocalMediaUrl\(faviconUrl\) \? \[createFavicon\(article\)\]/);
     assert.match(cardSource, /'aria-current':\s*'true'/);
     assert.match(articles, /requestOptions\.activeArticleId/);
     assert.match(articles, /new window\.IntersectionObserver/);
@@ -164,6 +197,7 @@ test('le lecteur structure le texte en paragraphes sans injecter de HTML', () =>
     assert.match(reader, /img\|table\|thead\|tbody\|tfoot\|tr\|th\|td\|details\|summary/);
     assert.match(css, /\.reader-article-content img\s*\{[^}]*max-width:\s*100%[^}]*height:\s*auto/);
     assert.match(reader, /reader-image-trigger/);
+    assert.match(reader, /reader-feed-favicon-visual/);
     assert.match(reader, /Agrandir l’image de l’article/);
     assert.match(reader, /variant: 'image'/);
     assert.ok(reader.includes('text.split(/\\n\\s*\\n/u)'));
@@ -211,6 +245,10 @@ test('les actions de l’onglet Flux partagent la ligne du nombre de flux, align
     const panel = management.slice(management.indexOf('renderFeedsPanel()'));
     assert.ok(panel.indexOf('renderFeedsPanelToolbar()') < panel.indexOf('stateBlock('));
     assert.doesNotMatch(management, /management-header-actions/);
+    assert.match(management, /el\('details', \{ className: 'feed-accordion' \}\)/);
+    assert.match(management, /el\('summary', \{ className: 'management-item-header' \}\)/);
+    assert.match(management, /querySelectorAll\('\.feed-accordion\[open\]'\)/);
+    assert.match(css, /\.feed-accordion > summary\s*\{[^}]*cursor:\s*pointer/);
 });
 
 test('le lecteur mobile propose un retour en bas d’article, comme en haut', () => {

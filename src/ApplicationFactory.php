@@ -31,6 +31,7 @@ use App\Repository\CategoryRepository;
 use App\Repository\FeedRepository;
 use App\Repository\LoginAttemptRepository;
 use App\Repository\MediaReferenceRepository;
+use App\Repository\RememberTokenRepository;
 use App\Repository\RemoteActionAttemptRepository;
 use App\Repository\UserRepository;
 use App\Repository\UserSettingsRepository;
@@ -60,6 +61,7 @@ use App\Service\OpmlExporter;
 use App\Service\OpmlImportService;
 use App\Service\OpmlParser;
 use App\Service\RecommendationService;
+use App\Service\RememberTokenService;
 use App\Service\RemoteMediaService;
 use App\Service\UserService;
 use App\Service\UserSettingsService;
@@ -141,12 +143,21 @@ final class ApplicationFactory
         $authentication = new AuthenticationService($users, $rateLimiter);
         $currentUser = new CurrentUser($session, $authentication);
         $userService = new UserService($users, new PasswordPolicy(), $clock);
+        $rememberTokens = new RememberTokenService(
+            new RememberTokenRepository($pdo),
+            $authentication,
+            $clock,
+            $config->rememberLifetime,
+            $config->rememberCookieName,
+            $config->sessionSecure,
+        );
         $authController = new AuthController(
             $authentication,
             $userService,
             $session,
             $csrf,
             $currentUser,
+            $rememberTokens,
         );
         $httpClient = SafeHttpClientFactory::create($config);
         $feedRepository = new FeedRepository($pdo);
@@ -233,6 +244,8 @@ final class ApplicationFactory
                 $currentUser,
             ),
             $csrf,
+            $currentUser,
+            $rememberTokens,
         );
     }
 }

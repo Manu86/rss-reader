@@ -512,10 +512,11 @@ function createFavicon(article) {
 
 function createThumbnail(article) {
     const url = isObject(article) ? article.image_url : null;
+    const faviconUrl = articleFeed(article).favicon_url;
     const placeholder = viewEl('span', {
         className: 'article-thumbnail-placeholder',
         attrs: { 'aria-hidden': 'true' },
-    }, [viewIcon('rss')]);
+    }, isLocalMediaUrl(faviconUrl) ? [createFavicon(article)] : [viewIcon('rss')]);
     const wrapper = viewEl('span', { className: 'article-thumbnail' }, [placeholder]);
     if (!isLocalMediaUrl(url)) return wrapper;
 
@@ -647,6 +648,9 @@ export class ArticlesView {
         this.loadMore = nestedOption(source, 'loadMore')
             || nestedOption(source, 'infiniteScroll')
             || elementById('article-list-load-more');
+        this.footer = nestedOption(source, 'footer')
+            || nestedOption(source, 'articleListFooter')
+            || elementById('article-list-footer');
         this.scrollContainer = nestedOption(source, 'scrollContainer')
             || nestedOption(source, 'articleListScroll')
             || elementById('article-list-scroll');
@@ -903,6 +907,21 @@ export class ArticlesView {
     _applyHeader(context) {
         setText(this.title, context.title);
         setText(this.kicker, context.kicker);
+        this._renderFooter(context);
+    }
+
+    _renderFooter(context) {
+        if (!this.footer) return;
+        clear(this.footer);
+        if (context.filter !== 'recommendations') {
+            setHidden(this.footer, true);
+            return;
+        }
+        this.footer.appendChild(el('a', {
+            href: buildRoute('unread'),
+            className: 'button article-list-footer-button',
+        }, [icon('unread'), el('span', {}, 'Voir les articles non lus')]));
+        setHidden(this.footer, false);
     }
 
     _setSearchVisibility(query, options) {

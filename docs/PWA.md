@@ -45,7 +45,40 @@ where appropriate.
 
 Production requires HTTPS.
 
+## System bars and screen coverage
+
+The installed application must occupy the whole screen, without a band above
+or below the interface. The manifest therefore requests full screen and falls
+back to standalone:
+
+``` json
+{
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen"]
+}
+```
+
+Consequences to keep in mind:
+
+-   the platform system bars are hidden, so the clock, the battery and the
+    navigation affordances are no longer visible;
+-   the content is laid out under the display cutout and under the gesture
+    area, so the shell declares `viewport-fit=cover` and the interface applies
+    `env(safe-area-inset-top)` to the header, `env(safe-area-inset-bottom)` to
+    the page and to the navigation drawer;
+-   the theme color cannot fix a band, because a single value cannot follow
+    both interface themes, and an installed application reads the manifest
+    value at startup. It still describes the theme for browser interfaces and
+    for platforms that honor the meta element, so it follows the active theme:
+    the shell declares a `theme-color` meta tag with the `id="theme-color"`
+    and the light page background, and `applyTheme` updates it with the page
+    background (`--soft`) of the active theme, on startup and on every theme
+    change;
+-   the manifest `background_color` matches the light page background and is
+    only used for the installation splash screen.
+
 ## Service worker
+
 
 Registration failure must not prevent normal website use.
 

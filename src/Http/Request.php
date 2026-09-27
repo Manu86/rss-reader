@@ -15,6 +15,7 @@ final readonly class Request
     /** @param array<string, string> $headers
      *  @param array<string, mixed> $query
      *  @param array<string, UploadedFile> $files
+     *  @param array<string, string> $cookies
      */
     public function __construct(
         public string $method,
@@ -24,6 +25,7 @@ final readonly class Request
         public string $remoteAddress = '',
         private array $query = [],
         private array $files = [],
+        private array $cookies = [],
     ) {}
 
     public static function fromGlobals(): self
@@ -55,6 +57,13 @@ final readonly class Request
             }
         }
 
+        $cookies = [];
+        foreach ($_COOKIE as $name => $value) {
+            if (is_string($name) && is_string($value)) {
+                $cookies[$name] = $value;
+            }
+        }
+
         return new self(
             $method,
             is_string($path) ? $path : '/',
@@ -63,12 +72,18 @@ final readonly class Request
             is_string($_SERVER['REMOTE_ADDR'] ?? null) ? $_SERVER['REMOTE_ADDR'] : '',
             $query,
             $files,
+            $cookies,
         );
     }
 
     public function header(string $name): ?string
     {
         return $this->headers[strtolower($name)] ?? null;
+    }
+
+    public function cookie(string $name): ?string
+    {
+        return $this->cookies[$name] ?? null;
     }
 
     /** @return array<string, mixed> */

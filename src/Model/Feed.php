@@ -32,7 +32,11 @@ final readonly class Feed
         return [
             'id' => $this->id,
             'category_id' => $this->categoryId,
-            'name' => $this->name,
+            'name' => html_entity_decode(
+                html_entity_decode($this->name, ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                ENT_QUOTES | ENT_HTML5,
+                'UTF-8',
+            ),
             'feed_url' => $this->feedUrl,
             'site_url' => $this->siteUrl,
             'favicon_url' => $this->faviconPath === null ? null : '/api/feeds/' . $this->id . '/favicon',

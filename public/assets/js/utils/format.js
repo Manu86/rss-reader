@@ -5,6 +5,12 @@ const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
     year: 'numeric',
     timeZone: 'UTC',
 });
+const longDateFormatter = new Intl.DateTimeFormat('fr-FR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+});
 
 function dateValue(value) {
     if (value === null || value === undefined || value === '') {
@@ -38,6 +44,11 @@ function lastFetchStatus(value) {
 export function formatDate(value) {
     const date = dateValue(value);
     return date === null ? UNKNOWN_DATE : dateFormatter.format(date);
+}
+
+export function formatLongDate(value) {
+    const date = dateValue(value);
+    return date === null ? UNKNOWN_DATE : longDateFormatter.format(date);
 }
 
 export function formatDateTime(value) {

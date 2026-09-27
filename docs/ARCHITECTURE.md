@@ -274,6 +274,17 @@ production for local HTTP development when `APP_ENV` is explicitly set to a
 non-production value. Production forces secure cookies on regardless of this
 setting. Invalid values are rejected at startup.
 
+Session and "remember me" settings:
+
+| Variable                  | Default                | Meaning                                        |
+| ------------------------- | ---------------------- | ---------------------------------------------- |
+| `APP_SESSION_NAME`        | `rss_reader_session`   | session cookie name                            |
+| `APP_SESSION_LIFETIME`    | `7200`                 | session cookie lifetime, in seconds (min 300)  |
+| `APP_REMEMBER_COOKIE_NAME` | `rss_reader_remember`  | "remember me" cookie name                      |
+| `APP_REMEMBER_LIFETIME`   | `2592000`              | token lifetime, in seconds (min 3600, 30 days) |
+
+The "remember me" cookie reuses `APP_SESSION_SECURE` for its `Secure` flag.
+
 Secrets must not be committed.
 
 ## Frontend
@@ -316,6 +327,17 @@ Production requirements:
 -   migrations applied;
 -   cron configured;
 -   secure configuration.
+
+Migrations are not applied automatically at runtime. After every update, run:
+
+``` bash
+php bin/console db:migrate
+```
+
+Skipping this step is not harmless in general: endpoints that read a table
+introduced by a pending migration fail. The optional persistent-login table is
+the one documented exception, because it degrades to a logged-out user instead
+of failing the request.
 
 No container, queue, cache server or microservice infrastructure is
 required for V1.

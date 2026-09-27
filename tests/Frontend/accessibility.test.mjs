@@ -80,6 +80,38 @@ test('les animations respectent prefers-reduced-motion et les cibles sont élarg
     assert.match(css, /@media\s*\(prefers-contrast:\s*more\)/);
 });
 
+test('la case « se souvenir de moi » est compacte et alignée à gauche', () => {
+    const dom = new JSDOM(readFileSync(join(publicRoot, 'index.html'), 'utf8'), {
+        url: 'http://127.0.0.1:8099/',
+    });
+    const style = dom.window.document.createElement('style');
+    style.textContent = css;
+    dom.window.document.head.appendChild(style);
+
+    const document = dom.window.document;
+    const checkbox = document.querySelector('#login-remember');
+    assert.ok(checkbox, 'la case à cocher est absente du formulaire');
+    assert.strictEqual(checkbox.type, 'checkbox');
+    assert.strictEqual(checkbox.checked, false, 'la case ne doit pas être pré-cochée');
+    assert.ok(checkbox.closest('label') === null, 'le label doit être un frère, pas un parent');
+
+    const label = document.querySelector('label[for="login-remember"]');
+    assert.ok(label, 'le libellé de la case est absent');
+    assert.strictEqual(label.textContent.trim(), 'Se souvenir de moi');
+
+    // A regex on the stylesheet would pass even if the selector matched nothing,
+    // so the cascade is resolved against the real markup here.
+    const row = dom.window.getComputedStyle(checkbox.parentElement);
+    const box = dom.window.getComputedStyle(checkbox);
+    assert.strictEqual(row.display, 'flex');
+    assert.strictEqual(row.justifyContent, 'flex-start');
+    assert.strictEqual(row.alignItems, 'center');
+    assert.strictEqual(box.width, '0.6rem');
+    assert.strictEqual(box.height, '0.6rem');
+    assert.strictEqual(box.minHeight, '0', 'la case ne doit pas hériter de la hauteur des champs');
+    dom.window.close();
+});
+
 test('le shell passe l’audit axe-core', async () => {
     const html = readFileSync(join(publicRoot, 'index.html'), 'utf8');
     const dom = new JSDOM(html, {

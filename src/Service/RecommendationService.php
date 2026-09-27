@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Clock\Clock;
+use App\Clock\SystemClock;
 use App\Exception\NotFoundException;
 use App\Model\Article;
 use App\Repository\ArticleRepository;
 use App\Repository\CategoryRepository;
+use DateTimeImmutable;
+use Exception;
 use Random\Randomizer;
 
 /**
@@ -21,13 +25,25 @@ final readonly class RecommendationService
 {
     private const FAVORITE_SIGNAL_LIMIT = 20;
     private const CANDIDATE_LIMIT = 60;
+    private const RECOMMENDATION_POOL_LIMIT = 48;
     private const RECOMMENDATION_LIMIT = 24;
     private const TITLE_TERM_LIMIT_PER_FAVORITE = 6;
     private const TITLE_TERM_LIMIT = 30;
     private const TAG_TERM_LIMIT = 30;
     private const MIN_TERM_LENGTH = 3;
     private const MAX_TERM_LENGTH = 32;
+    /**
+     * Score minimal pour être recommandé. La base vaut 1, donc 2 exige une
+     * vraie raison de matcher : au moins un tag partagé (+2), la même catégorie
+     * qu'un favori (+2), ou une pertinence FTS d'au plus un tiers du meilleur
+     * candidat. En deçà, l'article ne partage qu'un mot banal et n'est pas
+     * affiché. Le bruit n'entre pas dans ce calcul, pour que l'inclusion reste
+     * reproductible d'un chargement à l'autre.
+     */
+    private const MIN_SCORE = 3.0;
     private const RELEVANCE_WEIGHT = 3.0;
+    private const FRESHNESS_WEIGHT = 1.0;
+    private const FRESHNESS_WINDOW_SECONDS = 2_592_000;
     private const TAG_WEIGHT = 2;
     private const CATEGORY_WEIGHT = 2;
     /**
@@ -60,6 +76,7 @@ final readonly class RecommendationService
         private ArticleRepository $articles,
         private CategoryRepository $categories,
         private Randomizer $randomizer = new Randomizer(),
+        private Clock $clock = new SystemClock(),
     ) {}
 
     /** @return list<Article> */
@@ -160,8 +177,10 @@ final readonly class RecommendationService
 
     /**
      * score = 1 + 3 × pertinence FTS normalisée + 2 × tags partagés + 2 × même
-     * catégorie qu'un favori, plus un bruit borné à ±0,6. L'égalité est
-     * départagée par la date décroissante puis par l'identifiant.
+     * catégorie qu'un favori, plus un bruit borné à ±0,6 appliqué au seul
+     * classement. Seuls les candidats dont la partie déterministe atteint
+     * MIN_SCORE sont retenus. L'égalité est départagée par la date décroissante
+     * puis par l'identifiant.
      *
      * @param list<array{article: Article, relevance: float}> $matches
      * @param list<array{id: int, title: string, tags: list<string>, category_id: int|null}> $signals
@@ -182,17 +201,26 @@ final readonly class RecommendationService
             }
         }
 
-        $bestRelevance = 0.0;
+        // Le favori qui a produit les termes matche lui aussi la requête FTS,
+        // et son titre est par nature très proche de la requête. Le garder dans
+        // la référence de normalisation écrasait la pertinence de tous les
+        // autres candidats, qui se retrouvait à zéro. On ne normalise donc que
+        // sur les candidats réellement recommandables.
+        $candidates = [];
         foreach ($matches as $match) {
+            if (!$match['article']->favorite) {
+                $candidates[] = $match;
+            }
+        }
+
+        $bestRelevance = 0.0;
+        foreach ($candidates as $match) {
             $bestRelevance = max($bestRelevance, $match['relevance']);
         }
 
         $scored = [];
-        foreach ($matches as $match) {
+        foreach ($candidates as $match) {
             $article = $match['article'];
-            if ($article->favorite) {
-                continue;
-            }
             $tags = is_array($article->tags) ? $article->tags : [];
             $tagScore = count($favoriteTags) > 0 && count($tags) > 0
                 ? self::TAG_WEIGHT * count(array_intersect($tags, $favoriteTags))
@@ -202,8 +230,16 @@ final readonly class RecommendationService
             $relevanceScore = $bestRelevance > 0.0
                 ? self::RELEVANCE_WEIGHT * ($match['relevance'] / $bestRelevance)
                 : 0.0;
+            // Le seuil porte sur la partie déterministe, jamais sur le score
+            // bruité : sinon le même article pourrait entrer ou non selon le
+            // tirage aléatoire, et la sélection deviendrait non reproductible.
+            $baseScore = 1 + $tagScore + $categoryScore + $relevanceScore;
+            if ($baseScore < self::MIN_SCORE) {
+                continue;
+            }
             $scored[] = [
-                'score' => 1 + $tagScore + $categoryScore + $relevanceScore
+                'score' => $baseScore
+                    + $this->freshnessScore($article)
                     + ($this->randomizer->getFloat(0, 1) * 2 - 1) * self::JITTER,
                 'article' => $article,
             ];
@@ -220,14 +256,32 @@ final readonly class RecommendationService
             return $byDate !== 0 ? $byDate : $left['article']->id <=> $right['article']->id;
         });
 
-        $selected = [];
-        foreach ($scored as $entry) {
-            $selected[] = $entry['article'];
-            if (count($selected) >= self::RECOMMENDATION_LIMIT) {
-                break;
-            }
+        $pool = array_slice($scored, 0, self::RECOMMENDATION_POOL_LIMIT);
+        if (count($pool) <= self::RECOMMENDATION_LIMIT) {
+            return array_map(
+                static fn(array $entry): Article => $entry['article'],
+                $pool,
+            );
         }
 
-        return $selected;
+        $pool = $this->randomizer->shuffleArray($pool);
+
+        return array_map(
+            static fn(array $entry): Article => $entry['article'],
+            array_slice($pool, 0, self::RECOMMENDATION_LIMIT),
+        );
+    }
+
+    private function freshnessScore(Article $article): float
+    {
+        $date = $article->publishedAt ?? $article->discoveredAt;
+        try {
+            $age = $this->clock->now()->getTimestamp() - (new DateTimeImmutable($date))->getTimestamp();
+        } catch (Exception) {
+            return 0.0;
+        }
+        $ratio = max(0.0, min(1.0, $age / self::FRESHNESS_WINDOW_SECONDS));
+
+        return self::FRESHNESS_WEIGHT * (1.0 - $ratio);
     }
 }

@@ -72,7 +72,7 @@ function userName(user) {
 }
 
 function refreshSummary(result) {
-    const results = Array.isArray(importValue(result).results) ? importValue(result).results : [];
+    const results = Array.isArray(dataValue(result).results) ? dataValue(result).results : [];
     if (results.length === 0) {
         return 'Actualisation terminée : aucun flux à actualiser.';
     }
@@ -408,9 +408,9 @@ export class SettingsView {
         }
 
         view.appendChild(this.renderAppearanceSection());
-        view.appendChild(this.renderPasswordSection());
         view.appendChild(this.renderFeedRefreshSection());
         view.appendChild(this.renderOpmlSection());
+        view.appendChild(this.renderPasswordSection());
         setChildren(this.root, view);
     }
 
@@ -534,7 +534,7 @@ export class SettingsView {
                 controls.form,
                 () => callback(file),
                 (result) => {
-                    const values = importValue(result);
+                    const values = dataValue(result);
                     controls.file.value = '';
                     const imported = countValue(values.imported);
                     const duplicates = countValue(values.duplicates);
@@ -602,7 +602,7 @@ export class SettingsView {
                 form,
                 () => callback(),
                 (result) => {
-                    const value = importValue(result);
+                    const value = dataValue(result);
                     if (Array.isArray(value.feeds)) {
                         this.feeds = value.feeds;
                         renderInfo();

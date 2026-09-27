@@ -14,6 +14,30 @@ Technical implementation belongs in the specialized documents.
 -   Login errors must not reveal whether an account exists.
 -   Users can log out and change their own password.
 
+### Staying signed in
+
+The login form offers an opt-in `Se souvenir de moi` checkbox, **unchecked by
+default**, so a new login never prolongs a session the user did not ask for.
+
+When checked, the account stays signed in across browser restarts for up to 30
+days, without weakening the password rules: no password is ever stored, and the
+credential can be revoked at any time.
+
+Expected behavior:
+
+-   the choice is remembered only for the browser that made it, never
+    synchronized to the account;
+-   a session that has simply expired silently reopens, so the user lands
+    directly on their articles;
+-   logging out ends the remembered sign-in as well;
+-   unchecking the box at the next login forgets the current browser;
+-   changing the password forgets every remembered browser;
+-   deactivating an account invalidates its remembered sign-ins;
+-   a disabled account is never restored, even with a valid token.
+
+See `docs/SECURITY.md` for the token mechanism and `docs/DATABASE.md` for
+storage.
+
 ## User independence
 
 Every user owns independent categories, feeds, articles, read states,
@@ -27,12 +51,12 @@ and article records.
 V1 provides:
 
 -   password change;
--   articles-per-page selection;
+-   articles-per-load selection;
 -   interface theme selection (light or dark);
 -   OPML import;
 -   OPML export.
 
-Suggested page sizes: 10, 25, 50, 100. Default: 25.
+Suggested load sizes: 10, 25, 50, 100 articles. Default: 25.
 
 ## Categories
 
@@ -161,14 +185,28 @@ up to twenty-four unread article suggestions:
   shared tags and the same category as favorites;
 - candidates are unread articles of the user's own feeds, never favorited
   already, never other users' articles;
+- a minimum score of 2 is required for an article to be recommended: on top of
+  the base point, it needs at least one shared tag (+2), the same category as a
+  favorite (+2), or an FTS relevance of at least one third of the best
+  candidate (+3 × ratio). Articles whose only reason to match is an incidental
+  common word are not displayed;
+- the threshold applies to the deterministic part of the score, before the
+  jitter, so the selection is reproducible between two identical loads;
 - the selection favors the closest FTS matches and prefers articles that share
   tags or categories with recent favorites;
-- the final order applies a small bounded random jitter (at most 0,6 point on a
-  score whose relevance weight is 3) so the same articles do not stay pinned at
-  the top of the view; a clearly stronger match still comes first;
+- a freshness bonus of up to +1 point favors recent articles and decreases
+  progressively over 30 days; age affects ranking but does not by itself
+  exclude an eligible article;
+- the 48 best eligible suggestions form a pool, from which 24 are selected at
+  random for display; a small bounded random jitter (at most 0,6 point on a
+  score whose relevance weight is 3) is applied before building the pool so
+  equally close matches can vary;
 - no AI, no external service, no cross-user data;
 - the view shows the standard empty state when the user has no favorite
-  history; the list may also be empty when no relevant unread article is found.
+  history; the list may also be empty when no relevant unread article is found
+  or when none of them reaches the minimum score. At most 24 articles are
+  returned. When more than 24 suggestions are eligible, the response does
+  not expose the total number of eligible suggestions.
 
 ## Article tags
 

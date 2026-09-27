@@ -1,4 +1,4 @@
-import { formatDate, UNKNOWN_DATE } from '../utils/format.js';
+import { formatLongDate, UNKNOWN_DATE } from '../utils/format.js';
 import { buildRoute } from '../router.js?v=26';
 import { openDialog } from '../components/dialog.js';
 import {
@@ -438,7 +438,7 @@ function articleDate(article) {
     const raw = nonEmpty(published) ? published : (nonEmpty(discovered) ? discovered : null);
     return {
         raw,
-        label: raw === null ? UNKNOWN_DATE : formatDate(raw),
+        label: raw === null ? UNKNOWN_DATE : formatLongDate(raw),
     };
 }
 
@@ -493,7 +493,10 @@ function createFavicon(article) {
 function createArticleImage(article) {
     const url = isObject(article) ? article.image_url : null;
     if (!isLocalMediaUrl(url)) {
-        return null;
+        const faviconUrl = articleFeed(article).favicon_url;
+        return isLocalMediaUrl(faviconUrl)
+            ? viewEl('div', { className: 'reader-feed-favicon-visual' }, [createFavicon(article)])
+            : null;
     }
 
     let image = null;
@@ -913,6 +916,11 @@ export class ReaderView {
         const title = articleTitle(article);
         const date = articleDate(article);
         const author = nonEmpty(article.author) ? textValue(article.author) : null;
+        const dateElement = viewEl('time', {
+            className: 'reader-date',
+            text: date.label,
+            attrs: date.raw === null ? {} : { datetime: textValue(date.raw) },
+        });
         const contentText = nonEmpty(article.content)
             ? textValue(article.content)
             : articleSummary(article);
@@ -935,12 +943,9 @@ export class ReaderView {
                     ]);
                 })(),
                 viewEl('div', { className: 'reader-meta' }, [
-                    author === null ? null : viewEl('span', { className: 'reader-author', text: author }),
-                    viewEl('time', {
-                        className: 'reader-date',
-                        text: date.label,
-                        attrs: date.raw === null ? {} : { datetime: textValue(date.raw) },
-                    }),
+                    author === null
+                        ? dateElement
+                        : viewEl('span', { className: 'reader-author' }, [`Par ${author}, le `, dateElement]),
                     viewEl('span', {
                         className: 'article-category-tag reader-category-tag',
                         text: categoryName(article),

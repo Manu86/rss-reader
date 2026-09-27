@@ -415,7 +415,7 @@ export class ManagementView {
             item.setAttribute('data-feed-id', key);
         }
 
-        const itemHeader = el('div', { className: 'management-item-header' });
+        const itemHeader = el('summary', { className: 'management-item-header' });
         const titleWrap = el('div', { className: 'management-item-title-wrap' });
         const faviconUrl = textValue(value.favicon_url, '');
         if (isLocalUrl(faviconUrl)) {
@@ -426,17 +426,33 @@ export class ManagementView {
                 loading: 'lazy',
             }));
         }
-        if (id === null) {
-            titleWrap.appendChild(el('span', { className: 'management-item-title' }, name));
-        } else {
-            titleWrap.appendChild(el('a', {
-                className: 'management-item-title',
-                href: buildRoute('feed', { id }),
-            }, name));
-        }
+        titleWrap.appendChild(el('span', { className: 'management-item-title' }, name));
         itemHeader.appendChild(titleWrap);
         itemHeader.appendChild(el('span', { className: `status-badge${active ? ' is-active' : ''}` }, active ? 'Actif' : 'Désactivé'));
-        item.appendChild(itemHeader);
+        const accordion = el('details', { className: 'feed-accordion' });
+        accordion.addEventListener('toggle', () => {
+            if (!accordion.open) {
+                return;
+            }
+            const list = accordion.closest('.feed-list');
+            if (!list) {
+                return;
+            }
+            list.querySelectorAll('.feed-accordion[open]').forEach((other) => {
+                if (other !== accordion) {
+                    other.open = false;
+                }
+            });
+        });
+        accordion.appendChild(itemHeader);
+
+        if (id !== null) {
+            accordion.appendChild(el('p', { className: 'management-feed-link' }, [
+                el('a', {
+                    href: buildRoute('feed', { id }),
+                }, 'Voir les articles de ce flux'),
+            ]));
+        }
 
         const details = el('dl', { className: 'management-details' });
         details.appendChild(detailItem('Catégorie', categoryName(value.category_id, this.state.categories, textValue(value.category_name, 'Sans catégorie'))));
@@ -452,10 +468,10 @@ export class ManagementView {
         if (count !== null && count !== undefined) {
             details.appendChild(detailItem('Articles enregistrés', formatNumber(count)));
         }
-        item.appendChild(details);
+        accordion.appendChild(details);
 
         if (typeof value.last_fetch_error === 'string' && value.last_fetch_error !== '') {
-            item.appendChild(el('p', { className: 'feed-error' }, value.last_fetch_error));
+            accordion.appendChild(el('p', { className: 'feed-error' }, value.last_fetch_error));
         }
 
         const actions = el('div', { className: 'management-item-actions' });
@@ -492,11 +508,12 @@ export class ManagementView {
             ariaLabel: `Supprimer ${name}`,
             onClick: () => this.confirmDeleteFeed(value, name, deleteCallback, actionKey('delete')),
         }));
-        item.appendChild(actions);
+        accordion.appendChild(actions);
 
         if (busy) {
-            item.appendChild(el('p', { className: 'inline-status', role: 'status' }, 'Opération en cours…'));
+            accordion.appendChild(el('p', { className: 'inline-status', role: 'status' }, 'Opération en cours…'));
         }
+        item.appendChild(accordion);
         return item;
     }
 

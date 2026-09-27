@@ -34,7 +34,11 @@ final readonly class Article
             'id' => $this->id,
             'feed' => [
                 'id' => $this->feedId,
-                'name' => $this->feedName,
+                'name' => html_entity_decode(
+                    html_entity_decode($this->feedName, ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                    ENT_QUOTES | ENT_HTML5,
+                    'UTF-8',
+                ),
                 'favicon_url' => $this->feedHasFavicon
                     ? '/api/feeds/' . $this->feedId . '/favicon'
                     : null,

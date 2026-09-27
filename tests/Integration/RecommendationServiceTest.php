@@ -219,6 +219,30 @@ final class RecommendationServiceTest extends TestCase
         self::assertCount(24, $recommendations);
     }
 
+    public function testTwentyFourArticlesAreDrawnFromTheRecommendationPool(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            11,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        $this->insertEquallyScoredCandidates(48);
+
+        $lists = [];
+        for ($seed = 1; $seed <= 4; $seed++) {
+            $ids = $this->ids($this->serviceWithSeed($seed)->forUser(self::ALICE));
+            self::assertCount(24, $ids, 'seed ' . $seed);
+            $lists[] = $ids;
+        }
+
+        self::assertGreaterThan(1, count(array_unique(array_map(
+            static fn(array $ids): string => implode(',', $ids),
+            $lists,
+        ))));
+    }
+
     public function testRankingIsReproducibleForAGivenSeed(): void
     {
         $this->insertArticle(
@@ -288,6 +312,167 @@ final class RecommendationServiceTest extends TestCase
                 $this->ids($recommendations),
                 'seed ' . $seed,
             );
+        }
+    }
+
+    /**
+     * Un article dont la seule raison de matcher est un terme retrouvé dans
+     * l'auteur, alors qu'un autre candidat matche nettement le titre, ne doit
+     * pas être recommandé : sa pertinence normalisée est quasi nulle.
+     */
+    public function testIncidentalAuthorMatchIsNotRecommended(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            11,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        $strong = $this->insertArticle(
+            self::ALICE,
+            10,
+            title: 'Photovoltaïque en Aude : le bilan',
+            publishedAt: '2026-09-18T08:00:00Z',
+        );
+        $incidental = $this->insertArticle(
+            self::ALICE,
+            20,
+            title: 'Dossier du mois',
+            publishedAt: '2026-09-19T08:00:00Z',
+            author: 'Photovoltaïque',
+        );
+
+        $ids = $this->ids($this->recommendations->forUser(self::ALICE));
+
+        self::assertSame([$strong], $ids);
+        self::assertNotContains($incidental, $ids);
+    }
+
+    /**
+     * Le bonus de tag (+2) doit suffire à franchir le seuil de 2 même quand la
+     * pertinence FTS est négligeable. L'article témoin, identique sauf les
+     * tags, doit rester exclu : c'est bien le tag qui fait la différence.
+     */
+    public function testASharedTagLiftsAnArticleAboveTheThreshold(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            11,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        $this->insertArticle(
+            self::ALICE,
+            10,
+            title: 'Photovoltaïque en Aude : le bilan',
+            publishedAt: '2026-09-18T08:00:00Z',
+        );
+        $tagged = $this->insertArticle(
+            self::ALICE,
+            20,
+            title: 'Dossier du mois',
+            publishedAt: '2026-09-19T08:00:00Z',
+            author: 'Photovoltaïque',
+            tags: ['photovoltaïque'],
+        );
+        $untagged = $this->insertArticle(
+            self::ALICE,
+            20,
+            title: 'Autre dossier',
+            publishedAt: '2026-09-20T08:00:00Z',
+            author: 'Photovoltaïque',
+        );
+
+        $ids = $this->ids($this->recommendations->forUser(self::ALICE));
+
+        self::assertContains($tagged, $ids);
+        self::assertNotContains($untagged, $ids);
+    }
+
+    /**
+     * Même principe avec la catégorie : un article de la catégorie d'un favori
+     * est recommandé même si son seul match FTS est incident, contrairement à
+     * un article équivalent situé dans une autre catégorie.
+     */
+    public function testTheFavoriteCategoryLiftsAnArticleAboveTheThreshold(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            10,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        $strong = $this->insertArticle(
+            self::ALICE,
+            20,
+            title: 'Photovoltaïque en Aude : le bilan',
+            publishedAt: '2026-09-18T08:00:00Z',
+        );
+        $sameCategory = $this->insertArticle(
+            self::ALICE,
+            10,
+            title: 'Dossier du mois',
+            publishedAt: '2026-09-19T08:00:00Z',
+            author: 'Photovoltaïque',
+        );
+        $otherCategory = $this->insertArticle(
+            self::ALICE,
+            20,
+            title: 'Autre dossier',
+            publishedAt: '2026-09-20T08:00:00Z',
+            author: 'Photovoltaïque',
+        );
+
+        $ids = $this->ids($this->recommendations->forUser(self::ALICE));
+
+        self::assertSame([$strong, $sameCategory], $ids);
+        self::assertNotContains($otherCategory, $ids);
+    }
+
+    /**
+     * Le seuil porte sur la partie déterministe du score : le bruit de
+     * classement ne doit jamais faire entrer un article de justesse, ni en
+     * sortir un article qui dépasse le seuil.
+     */
+    public function testThresholdIsNotAffectedByTheJitter(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            11,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        $this->insertArticle(
+            self::ALICE,
+            10,
+            title: 'Photovoltaïque en Aude : le bilan',
+            publishedAt: '2026-09-18T08:00:00Z',
+        );
+        $this->insertArticle(
+            self::ALICE,
+            20,
+            title: 'Dossier du mois',
+            publishedAt: '2026-09-19T08:00:00Z',
+            author: 'Photovoltaïque',
+        );
+        $this->insertArticle(
+            self::ALICE,
+            20,
+            title: 'Autre dossier',
+            publishedAt: '2026-09-20T08:00:00Z',
+            author: 'Photovoltaïque',
+        );
+
+        $reference = null;
+        for ($seed = 1; $seed <= 12; $seed++) {
+            $ids = $this->ids($this->serviceWithSeed($seed)->forUser(self::ALICE));
+            self::assertCount(2, $ids, 'seed ' . $seed);
+            $reference ??= $ids;
+            self::assertSame($reference, $ids, 'seed ' . $seed);
         }
     }
 

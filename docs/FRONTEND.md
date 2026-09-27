@@ -15,6 +15,29 @@ No frontend framework.
 The interface is primarily a reading application: simple, fast,
 responsive, keyboard accessible and content-focused.
 
+## Login
+
+The login view is a single labelled form: username, password, the
+`Se souvenir de moi` checkbox, an error region and the submit button.
+
+-   the checkbox is **unchecked on every visit**: the choice is never
+    pre-selected, so staying signed in is always an explicit act;
+-   it is a real `<input type="checkbox">` associated with its `<label>` through
+    `for`/`id`, reachable by keyboard and operable with <kbd>Space</kbd>;
+-   the row is a left-aligned flex line, with the box hugging the left edge and
+    the label beside it; the box is deliberately small (`.6rem`) so it does not
+    compete with the text, and the label, not the box, is the pointer target;
+-   the label keeps a `1.75rem` minimum height so the row stays comfortable to
+    tap on a touch screen;
+-   its state is submitted as `remember` with the credentials, and nothing about
+    it is stored client-side;
+-   it is disabled while the request is in flight, like the other controls.
+
+The frontend holds no token of its own: the "remember me" cookie is `HttpOnly`
+and is set and cleared by the server, so the choice cannot be read or forged
+from JavaScript. Restoring a session needs no special client code, because the
+API client already retries once with a refreshed CSRF token.
+
 ## Main layout
 
 Large screens use three conceptual areas:
@@ -55,6 +78,18 @@ Flux
 
 The empty application route opens `Recommandé` by default. `Tous` uses its own
 explicit route so the global article view remains directly accessible.
+
+Each category row expands a sublist of its subscriptions. A subscription is
+presented exactly like a source line in the article list: the same 1.25rem
+local favicon, the same `.4rem` gap, the same muted `.78rem` name. The
+presentation is declared once, by sharing the `article-card-topline`,
+`article-source-name` and `article-favicon` rules with the navigation, so the
+two cannot drift apart. The sublist has no left border and no left indent, so
+subscription names align with their category. A long name is truncated with an
+ellipsis and must never widen the sidebar, so the sublist, its rows and the
+name itself all declare `min-width: 0`. The favicon is decorative, so it is
+hidden from assistive technology and the link keeps the feed name as its
+accessible text.
 
 Secondary actions:
 
@@ -118,8 +153,8 @@ keeps the same visual treatment as its hover state and exposes its current
 state semantically.
 
 Article lists use infinite scrolling. JavaScript requests and appends the next
-server-side API page shortly before the user reaches the bottom; it never loads
-the complete collection at once. Concurrent page requests are prevented and a
+server-side batch shortly before the user reaches the bottom; it never loads
+the complete collection at once. Concurrent batch requests are prevented and a
 failed continuation exposes a retry action.
 
 The article-list column is limited to the available viewport height. Its header,
@@ -130,7 +165,7 @@ In a feed view, the feed deletion action appears below the list title with a
 neutral secondary style. The destructive visual treatment is reserved for the
 confirmation action.
 
-Do not load all articles to paginate/filter in JavaScript.
+Do not load all articles to filter in JavaScript.
 
 ## Article reader
 
@@ -200,6 +235,12 @@ unread articles computed by the recommendation endpoint. With no suggestion,
 the view shows the standard empty state. Opening an article from the view
 keeps a working back navigation to the list.
 
+Because suggestions are capped, the view closes with a `Voir les articles non
+lus` link at the bottom of the list, pointing at the unread view. It is the
+only view that shows this footer. The link is a real anchor, so it is
+keyboard reachable and supports opening in a new tab, and the icon is
+decorative.
+
 ## Filters and search
 
 The frontend exposes:
@@ -231,6 +272,10 @@ Users can:
 
 Display retrieval status/error without exposing technical internals.
 
+In the feeds tab, each feed initially displays only its first line. The line is
+an accessible accordion summary; activating it with a pointer or keyboard
+reveals the feed details and actions. The details are collapsed by default.
+
 In the feeds tab, the feed count and the panel actions (add a feed, refresh
 all) share a single row, with the actions aligned to the trailing edge on
 every screen width.
@@ -254,6 +299,10 @@ Settings UI contains:
 -   articles-per-page selection;
 -   OPML import;
 -   OPML export.
+
+Section order is stable: appearance, feed refresh, OPML, then password
+change last. The password section is the destructive/rare action and
+stays at the bottom of the page.
 
 No general preference framework is required.
 
@@ -357,6 +406,20 @@ text or apply font boosting.
 
 Ship CSS changes through the service-worker cache version described in
 `PWA.md` so installed applications receive them.
+
+## Theme and system bars
+
+The interface theme is a user setting (light or dark) and does not follow the
+system preference.
+
+The installed PWA runs in full screen, as described in `PWA.md`: the layout
+must stay clear of the display cutout and of the gesture area, through
+`viewport-fit=cover` and the `env(safe-area-inset-*)` margins applied to the
+header, the page and the navigation drawer.
+
+The theme color of the page, used by the browser interfaces and by the
+platforms that honor the meta element, always matches the page background of
+the active theme. Changing the theme updates it immediately.
 
 ## Dates and text
 

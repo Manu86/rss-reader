@@ -25,6 +25,7 @@ use App\Repository\CategoryRepository;
 use App\Repository\FeedRepository;
 use App\Repository\LoginAttemptRepository;
 use App\Repository\MediaReferenceRepository;
+use App\Repository\RememberTokenRepository;
 use App\Repository\RemoteActionAttemptRepository;
 use App\Repository\UserRepository;
 use App\Repository\UserSettingsRepository;
@@ -52,6 +53,7 @@ use App\Service\OpmlExporter;
 use App\Service\OpmlImportService;
 use App\Service\OpmlParser;
 use App\Service\RecommendationService;
+use App\Service\RememberTokenService;
 use App\Service\RemoteMediaService;
 use App\Service\UserService;
 use App\Service\UserSettingsService;
@@ -87,12 +89,21 @@ final readonly class TestApplication
         );
         $authentication = new AuthenticationService($this->users, $rateLimiter);
         $currentUser = new CurrentUser($session, $authentication);
+        $rememberTokens = new RememberTokenService(
+            new RememberTokenRepository($this->pdo),
+            $authentication,
+            $clock,
+            2_592_000,
+            'rss_reader_remember',
+            false,
+        );
         $authController = new AuthController(
             $authentication,
             $this->userService,
             $session,
             $csrf,
             $currentUser,
+            $rememberTokens,
         );
         $httpClient ??= new SafeHttpClient(
             new RemoteUrlGuard(new UrlNormalizer(), new FakeDnsResolver([
@@ -193,6 +204,8 @@ final readonly class TestApplication
                 $currentUser,
             ),
             $csrf,
+            $currentUser,
+            $rememberTokens,
         );
     }
 }

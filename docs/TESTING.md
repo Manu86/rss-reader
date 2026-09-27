@@ -80,7 +80,7 @@ Cover isolated logic such as:
 -   URL/date normalization;
 -   deduplication identity/hash;
 -   validation;
--   pagination;
+-   infinite-scroll batch loading;
 -   normalized feed/article mapping.
 
 ## Integration/API tests
@@ -178,7 +178,7 @@ Use a fake/controlled remote HTTP adapter.
 
 ## Search
 
-Verify title, summary, content and author search, pagination, special
+Verify title, summary, content and author search, infinite-scroll loading, special
 input, deletion consistency and strict user isolation.
 
 FTS5 must be available in the test environment.

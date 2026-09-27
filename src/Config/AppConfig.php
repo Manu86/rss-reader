@@ -14,6 +14,8 @@ final readonly class AppConfig
         public string $sessionName,
         public int $sessionLifetime,
         public bool $sessionSecure,
+        public string $rememberCookieName,
+        public int $rememberLifetime,
         public int $httpConnectTimeoutMs,
         public int $httpTimeoutMs,
         public int $httpMaxResponseBytes,
@@ -28,6 +30,12 @@ final readonly class AppConfig
     ) {
         if ($this->sessionLifetime < 300) {
             throw new RuntimeException('La durée de session doit être d’au moins 300 secondes.');
+        }
+        if ($this->rememberLifetime < 3600) {
+            throw new RuntimeException('La durée du cookie de mémoire doit être d’au moins 3600 secondes.');
+        }
+        if (preg_match('/\A[A-Za-z0-9_-]+\z/', $this->rememberCookieName) !== 1) {
+            throw new RuntimeException('Le nom du cookie de mémoire est invalide.');
         }
         if ($this->httpConnectTimeoutMs < 100 || $this->httpTimeoutMs < $this->httpConnectTimeoutMs) {
             throw new RuntimeException('Les délais HTTP configurés sont invalides.');
@@ -55,6 +63,8 @@ final readonly class AppConfig
             self::stringValue($raw, 'session_name'),
             self::intValue($raw, 'session_lifetime'),
             self::boolValue($raw, 'session_secure'),
+            self::stringValue($raw, 'remember_cookie_name'),
+            self::intValue($raw, 'remember_lifetime'),
             self::intValue($raw, 'http_connect_timeout_ms'),
             self::intValue($raw, 'http_timeout_ms'),
             self::intValue($raw, 'http_max_response_bytes'),

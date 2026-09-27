@@ -59,6 +59,18 @@ final class FeedParserTest extends TestCase
         self::assertSame('<p>Résumé Atom</p>', $feed->articles[0]->summary);
     }
 
+    public function testPlainTextDecodesHtmlEntities(): void
+    {
+        $xml = '<rss version="2.0"><channel>'
+            . '<title>France 24 - Infos, news &amp;amp; actualités</title>'
+            . '</channel></rss>';
+
+        $feed = $this->parser->parse($xml, 'https://feeds.test/rss.xml');
+
+        self::assertNotNull($feed);
+        self::assertSame('France 24 - Infos, news & actualités', $feed->title);
+    }
+
     public function testPlainTextMarkdownIsConvertedBeforeSafeMarkupStorage(): void
     {
         $xml = '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">'

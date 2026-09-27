@@ -11,6 +11,7 @@ use App\Security\CsrfTokenManager;
 use App\Security\CurrentUser;
 use App\Security\Session;
 use App\Service\AuthenticationService;
+use App\Service\RememberTokenService;
 use App\Service\UserService;
 
 final readonly class AuthController
@@ -21,6 +22,7 @@ final readonly class AuthController
         private Session $session,
         private CsrfTokenManager $csrf,
         private CurrentUser $currentUser,
+        private RememberTokenService $rememberTokens,
     ) {}
 
     public function csrf(): Response
@@ -31,15 +33,19 @@ final readonly class AuthController
     public function login(Request $request): Response
     {
         $data = $request->json();
-        $request->rejectUnknownFields($data, ['username', 'password']);
+        $request->rejectUnknownFields($data, ['username', 'password', 'remember']);
         $username = $data['username'] ?? null;
         $password = $data['password'] ?? null;
+        $remember = $data['remember'] ?? false;
         $fields = [];
         if (!is_string($username) || trim($username) === '') {
             $fields['username'] = 'Le nom d’utilisateur est requis.';
         }
         if (!is_string($password) || $password === '') {
             $fields['password'] = 'Le mot de passe est requis.';
+        }
+        if (!is_bool($remember)) {
+            $fields['remember'] = 'La valeur attendue est un booléen.';
         }
         if ($fields !== []) {
             throw new ValidationException($fields);
@@ -50,17 +56,31 @@ final readonly class AuthController
         $this->currentUser->set($user);
         $token = $this->csrf->rotate();
 
+        // The cookie is always written: either a fresh token, or an explicit
+        // deletion so a previous "remember me" cookie cannot silently sign the
+        // user back in after a deliberate uncheck. Unchecking also drops the
+        // stored row, not just the browser copy.
+        if ($remember) {
+            $cookie = $this->rememberTokens->issue($user->id);
+        } else {
+            $this->rememberTokens->revoke($request->cookie($this->rememberTokens->cookieName()));
+            $cookie = $this->rememberTokens->clearCookie();
+        }
+
         return Response::json(['data' => [
             'user' => $user->publicData(),
             'csrf_token' => $token,
-        ]]);
+        ]])->withHeaders(['Set-Cookie' => $cookie->toHeader()]);
     }
 
-    public function logout(): Response
+    public function logout(Request $request): Response
     {
+        $this->rememberTokens->revoke($request->cookie($this->rememberTokens->cookieName()));
         $this->session->invalidate();
 
-        return Response::empty();
+        return Response::empty()->withHeaders([
+            'Set-Cookie' => $this->rememberTokens->clearCookie()->toHeader(),
+        ]);
     }
 
     public function me(): Response
@@ -87,9 +107,14 @@ final readonly class AuthController
         }
 
         $this->users->changeOwnPassword($user, $currentPassword, $newPassword);
+        $this->rememberTokens->revokeAll($user->id);
         $this->session->regenerate();
         $token = $this->csrf->rotate();
 
-        return Response::json(['data' => ['csrf_token' => $token]]);
+        // A password change is an explicit re-secure: remembered devices are
+        // forgotten, so every other browser must authenticate again.
+        return Response::json(['data' => ['csrf_token' => $token]])->withHeaders([
+            'Set-Cookie' => $this->rememberTokens->clearCookie()->toHeader(),
+        ]);
     }
 }

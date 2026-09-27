@@ -15,6 +15,8 @@ use App\Controller\RecommendationController;
 use App\Controller\SettingsController;
 use App\Exception\ApiException;
 use App\Security\CsrfTokenManager;
+use App\Security\CurrentUser;
+use App\Service\RememberTokenService;
 use Throwable;
 
 final readonly class ApiKernel
@@ -30,11 +32,14 @@ final readonly class ApiKernel
         private SettingsController $settings,
         private OpmlController $opml,
         private CsrfTokenManager $csrf,
+        private CurrentUser $currentUser,
+        private RememberTokenService $rememberTokens,
     ) {}
 
     public function handle(Request $request): Response
     {
         try {
+            $this->restoreRememberedSession($request);
             if (in_array($request->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
                 $this->csrf->validate($request->header('x-csrf-token'));
             }
@@ -69,12 +74,36 @@ final readonly class ApiKernel
         ]);
     }
 
+    /**
+     * Reopens a session from a valid "remember me" cookie, so an expired PHP
+     * session does not force a new password entry. Login and logout are
+     * excluded: the first must not silently reuse a previous device, the second
+     * must close the remembered state rather than restore it.
+     */
+    private function restoreRememberedSession(Request $request): void
+    {
+        if ($request->method === 'POST'
+            && ($request->path === '/api/auth/login' || $request->path === '/api/auth/logout')) {
+            return;
+        }
+        if ($this->currentUser->isAuthenticated()) {
+            return;
+        }
+
+        $userId = $this->rememberTokens->resolve(
+            $request->cookie($this->rememberTokens->cookieName()),
+        );
+        if ($userId !== null) {
+            $this->currentUser->restore($userId);
+        }
+    }
+
     private function dispatch(Request $request): Response
     {
         $exact = match ($request->method . ' ' . $request->path) {
             'GET /api/auth/csrf' => $this->auth->csrf(),
             'POST /api/auth/login' => $this->auth->login($request),
-            'POST /api/auth/logout' => $this->auth->logout(),
+            'POST /api/auth/logout' => $this->auth->logout($request),
             'GET /api/auth/me' => $this->auth->me(),
             'POST /api/settings/password' => $this->auth->changePassword($request),
             'GET /api/settings' => $this->settings->show(),

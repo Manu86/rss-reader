@@ -46,6 +46,7 @@ export function createLoginView(options = {}) {
     const form = requiredElement(root, 'login-form');
     const username = requiredElement(root, 'login-username');
     const password = requiredElement(root, 'login-password');
+    const remember = requiredElement(root, 'login-remember');
     const submit = requiredElement(root, 'login-submit');
     const error = requiredElement(root, 'login-error');
     const notice = requiredElement(root, 'login-notice');
@@ -92,6 +93,7 @@ export function createLoginView(options = {}) {
         busy = value;
         username.disabled = value;
         password.disabled = value;
+        remember.disabled = value;
         setButtonBusy(submit, value, 'Connexion…');
     };
 
@@ -109,6 +111,7 @@ export function createLoginView(options = {}) {
             await onLogin({
                 username: username.value,
                 password: password.value,
+                remember: remember.checked,
             });
             password.value = '';
             succeeded = true;

@@ -22,6 +22,21 @@ final readonly class CurrentUser
         $this->session->set(self::SESSION_KEY, $user->id);
     }
 
+    public function isAuthenticated(): bool
+    {
+        return is_int($this->session->get(self::SESSION_KEY));
+    }
+
+    /**
+     * Restores a session from an already validated user, regenerating the ID so
+     * a pre-login identifier can never be reused.
+     */
+    public function restore(int $userId): void
+    {
+        $this->session->regenerate();
+        $this->session->set(self::SESSION_KEY, $userId);
+    }
+
     public function require(): User
     {
         $userId = $this->session->get(self::SESSION_KEY);

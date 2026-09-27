@@ -5,7 +5,7 @@ import { ManagementView } from './views/management.js?v=3';
 import { SettingsView } from './views/settings.js?v=3';
 import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js';
 import { createLoginView } from './views/login.js';
-import { ArticlesView } from './views/articles.js?v=26';
+import { ArticlesView } from './views/articles.js?v=27';
 import { ReaderView } from './views/reader.js?v=31';
 import { buildRoute, parseRoute } from './router.js?v=26';
 import { errorMessage, el, icon, setChildren } from './utils/dom.js';
@@ -16,6 +16,7 @@ const app = {
     categories: [],
     feeds: [],
     counts: null,
+    recommendationCount: 0,
     route: null,
     loginView: null,
     articlesView: null,
@@ -29,6 +30,11 @@ const app = {
 };
 
 const dom = {};
+
+const THEME_COLORS = Object.freeze({
+    light: '#f4f6f8',
+    dark: '#0d151d',
+});
 
 function byId(id) {
     return document.getElementById(id);
@@ -67,7 +73,7 @@ function showLogin(message = '') {
     if (!app.loginView) {
         app.loginView = createLoginView({
             root: document,
-            onLogin: ({ username, password }) => login(username, password),
+            onLogin: (credentials) => login(credentials),
         });
     }
     app.loginView.setMessage(message);
@@ -101,7 +107,9 @@ function showApp() {
 }
 
 async function applyTheme(theme) {
-    document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+    const isDark = theme === 'dark';
+    document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+    dom.themeColor?.setAttribute('content', isDark ? THEME_COLORS.dark : THEME_COLORS.light);
 }
 
 async function loadTheme() {
@@ -113,8 +121,12 @@ async function loadTheme() {
     }
 }
 
-async function login(username, password) {
-    const response = await app.api.login(username.trim(), password);
+async function login({ username, password, remember }) {
+    const response = await app.api.login({
+        username: username.trim(),
+        password,
+        remember: remember === true,
+    });
     app.user = dataOf(response).user || dataOf(response);
     await Promise.all([loadShell(), loadTheme()]);
     showApp();
@@ -131,6 +143,7 @@ async function logout() {
         app.categories = [];
         app.feeds = [];
         app.counts = null;
+        app.recommendationCount = 0;
         app.articleListGeneration += 1;
         app.articleListRouteUrl = null;
         closeDialog();
@@ -139,14 +152,17 @@ async function logout() {
 }
 
 async function loadShell() {
-    const [categories, feeds, counts] = await Promise.all([
+    const [categories, feeds, counts, recommendations] = await Promise.all([
         app.api.listCategories(),
         app.api.listFeeds(),
         app.api.getCounts(),
+        app.api.recommendations().catch(() => null),
     ]);
     app.categories = listOf(categories, 'categories');
     app.feeds = listOf(feeds, 'feeds');
     app.counts = dataOf(counts, {});
+    const recommendationData = dataOf(recommendations, null);
+    app.recommendationCount = Array.isArray(recommendationData) ? recommendationData.length : 0;
     renderNavigation();
 }
 
@@ -174,9 +190,14 @@ function categoryStateKey(categoryId) {
     return categoryId === null || categoryId === undefined ? 'uncategorized' : Number(categoryId);
 }
 
-function revealArticleFeedGroup(feedId) {
-    const feed = app.feeds.find((value) => Number(value && value.id) === Number(feedId));
-    const key = categoryStateKey(feed ? feed.category_id : null);
+function articleFeedOf(article) {
+    return article !== null && typeof article === 'object' && article.feed !== null && typeof article.feed === 'object'
+        ? article.feed
+        : null;
+}
+
+function revealArticleFeedGroup(feed) {
+    const key = categoryStateKey(categoryKeyOf(feed));
     if (app.openCategoryIds.size === 1 && app.openCategoryIds.has(key)) {
         return;
     }
@@ -228,12 +249,7 @@ function navigationRow(label, href, categoryId, current) {
             ? categoryKeyOf(feed) === null
             : categoryKeyOf(feed) === categoryKey
     ));
-    const feedsRoute = feeds.map((feed) => navigationLink(
-        feedName(feed),
-        buildRoute('feed', { id: feedId(feed) }),
-        null,
-        navigationRouteFeedCurrent(feed),
-    ));
+    const feedsRoute = feeds.map((feed) => feedNavigationLink(feed, navigationRouteFeedCurrent(feed)));
     const sublist = el('div', {
         id: listId,
         className: 'navigation-sublist',
@@ -255,6 +271,67 @@ function feedId(feed) {
 
 function feedName(feed) {
     return feed && feed.name ? feed.name : 'Flux';
+}
+
+function feedInitial(name) {
+    const trimmed = typeof name === 'string' ? name.trim() : '';
+    return trimmed === '' ? '?' : trimmed.charAt(0).toUpperCase();
+}
+
+function isLocalMediaPath(value) {
+    if (typeof value !== 'string') {
+        return false;
+    }
+
+    const source = value.trim();
+    return source.startsWith('/') && !source.startsWith('//') && !source.includes('\\');
+}
+
+function navigationFavicon(feed) {
+    const fallback = el('span', {
+        className: 'navigation-favicon-fallback',
+        text: feedInitial(feedName(feed)),
+        attrs: { 'aria-hidden': 'true' },
+    });
+    const url = isLocalMediaPath(feed && feed.favicon_url) ? feed.favicon_url.trim() : null;
+    if (url === null) {
+        return el('span', { className: 'navigation-favicon' }, [fallback]);
+    }
+
+    let image = null;
+    const wrapper = el('span', { className: 'navigation-favicon' }, [fallback]);
+    image = el('img', {
+        className: 'navigation-favicon-image',
+        attrs: {
+            src: url,
+            alt: '',
+            loading: 'lazy',
+            decoding: 'async',
+        },
+        onLoad: () => {
+            setVisible(image, true);
+            setVisible(fallback, false);
+        },
+        onError: () => {
+            setVisible(image, false);
+            setVisible(fallback, true);
+        },
+    });
+    setChildren(wrapper, [image, fallback]);
+    return wrapper;
+}
+
+function feedNavigationLink(feed, current) {
+    return el('a', {
+        className: 'navigation-link navigation-feed-link',
+        href: buildRoute('feed', { id: feedId(feed) }),
+        attributes: current ? { 'aria-current': 'page' } : {},
+    }, [
+        el('span', { className: 'navigation-feed-source' }, [
+            navigationFavicon(feed),
+            el('span', { className: 'navigation-feed-name' }, feedName(feed)),
+        ]),
+    ]);
 }
 
 function navigationRouteFeedCurrent(feed) {
@@ -280,7 +357,7 @@ function renderNavigation() {
         dom.headerSettingsLink?.setAttribute('aria-current', 'page');
     }
     const main = [
-        ['Recommandé', buildRoute('recommendations'), 'recommendations', null],
+        ['Recommandé', buildRoute('recommendations'), 'recommendations', app.recommendationCount],
         ['Tous', buildRoute('home'), 'home', countFor('global', 'all')],
         ['Non lus', buildRoute('unread'), 'unread', countFor('global', 'unread')],
         ['Lus', buildRoute('read'), 'read', countFor('global', 'read')],
@@ -473,7 +550,7 @@ async function loadArticle(id, markRead = false) {
         }
         app.readerView.render(article);
         app.articlesView.updateArticle(article);
-        revealArticleFeedGroup(article.feed_id);
+        revealArticleFeedGroup(articleFeedOf(article));
     } catch (error) {
         app.readerView.renderError(error);
     }
@@ -525,7 +602,7 @@ async function renderReading(route, options = {}) {
         return;
     }
     app.readerView.renderPlaceholder();
-    if (app.articleListRouteUrl === routeUrl(route)) {
+    if (app.articleListRouteUrl === routeUrl(route) && route.name !== 'recommendations') {
         app.articlesView.setActiveArticle(null);
         return;
     }
@@ -815,6 +892,7 @@ async function start() {
 }
 
 function collectDom() {
+    dom.themeColor = byId('theme-color');
     dom.startup = byId('startup-view');
     dom.header = document.querySelector('.app-header');
     dom.login = byId('login-view');

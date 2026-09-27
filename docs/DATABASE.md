@@ -246,6 +246,33 @@ remote operations such as feed discovery. Rows reference `users` with
 `ON DELETE CASCADE`; they contain no URL, response body, session identifier or
 credential.
 
+## `user_remember_tokens`
+
+Opt-in persistent-login tokens backing the "remember me" cookie.
+
+``` sql
+CREATE TABLE user_remember_tokens (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    selector TEXT NOT NULL UNIQUE,
+    token_hash TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+```
+
+-   `selector` is the indexed lookup key of the `selector.validator` cookie
+    value; it is random but is not the secret;
+-   `token_hash` stores `sha256(validator)`, never the validator itself, so the
+    table can never be replayed as a credential;
+-   `expires_at` is absolute: tokens are not extended on use;
+-   indexes cover `user_id` (revocation) and `expires_at` (pruning);
+-   rows are removed with their user through `ON DELETE CASCADE`.
+
+The table holds no session identifier, and its contents must never be exposed
+through the API or the logs.
+
 ## Storage
 
 Recommended database path:

@@ -22,6 +22,8 @@ return [
     'session_name' => getenv('APP_SESSION_NAME') ?: 'rss_reader_session',
     'session_lifetime' => (int) (getenv('APP_SESSION_LIFETIME') ?: 7200),
     'session_secure' => $sessionSecure,
+    'remember_cookie_name' => getenv('APP_REMEMBER_COOKIE_NAME') ?: 'rss_reader_remember',
+    'remember_lifetime' => (int) (getenv('APP_REMEMBER_LIFETIME') ?: 2592000),
     'http_connect_timeout_ms' => (int) (getenv('APP_HTTP_CONNECT_TIMEOUT_MS') ?: 3000),
     'http_timeout_ms' => (int) (getenv('APP_HTTP_TIMEOUT_MS') ?: 10000),
     'http_max_response_bytes' => (int) (getenv('APP_HTTP_MAX_RESPONSE_BYTES') ?: 5242880),

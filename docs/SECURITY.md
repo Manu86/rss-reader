@@ -13,7 +13,13 @@ Security controls should be centralized and fail safely.
 
 Use server-side PHP sessions.
 
-Do not use JWT, OAuth, API tokens or browser-stored auth tokens in V1.
+Do not use JWT, OAuth or general-purpose API tokens in V1.
+
+The single documented exception is the opt-in "remember me" cookie, which is
+not an API token: it is a revocable, hashed-at-rest credential that only ever
+reopens a server-side session, described under [Sessions](#sessions). It is
+never accepted by the API on its own, and it carries no authority beyond the
+session it restores.
 
 Passwords:
 
@@ -47,6 +53,45 @@ Regenerate the session ID after login and password change.
 Logout invalidates server-side authenticated state.
 
 Use a reasonable session lifetime; no effectively permanent login.
+
+### Remember me
+
+The login form offers an opt-in "remember me" checkbox, unchecked by default.
+When checked, the server issues a second, dedicated cookie so an expired PHP
+session does not force a new password entry.
+
+The mechanism is a selector/validator pair:
+
+-   the cookie value is `selector.validator`, both lowercase hexadecimal;
+-   `selector` (16 random bytes) is the indexed lookup key;
+-   `validator` (32 random bytes) is the secret;
+-   only `sha256(validator)` is stored, so a database leak never yields a
+    usable cookie;
+-   resolution compares the stored hash with `hash_equals()`.
+
+Rules:
+
+-   the cookie is `HttpOnly`, `SameSite=Lax`, `Secure` in production, `Path=/`
+    and application-specific, like the session cookie;
+-   it only ever reopens a **server-side session**; the session identifier is
+    regenerated on restore, so a pre-login identifier is never reused;
+-   the account must still be active, otherwise the token is deleted;
+-   `POST /api/auth/login` and `POST /api/auth/logout` never restore from the
+    cookie: explicit credentials always win, and logout must not resurrect a
+    session it is closing;
+-   logout deletes the stored row and clears the cookie;
+-   unchecking the box on a later login also deletes the stored row, not only
+    the browser copy, so a stale cookie cannot silently sign the user back in;
+-   changing the password revokes every remembered device, on the grounds that a
+    password change is an explicit re-secure;
+-   tokens expire after a fixed lifetime (30 days by default) and are never
+    extended on use;
+-   expired rows are pruned when a new token is issued, so no scheduled job is
+    required and the table stays bounded;
+-   rows are removed with their user through `ON DELETE CASCADE`.
+
+Because the cookie is a bearer credential, it must never be logged, returned by
+the API, or exposed in error messages.
 
 Production requires HTTPS.
 `APP_SESSION_SECURE` defaults to enabled and cannot be disabled when
