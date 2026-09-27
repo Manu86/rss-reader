@@ -24,7 +24,7 @@ PWA et une API JSON.
 - Tags d'articles importés des flux, affichés en lecture seule dans le lecteur
 - « Recommandé pour vous » : suggestions locales de non-lus proches de vos favoris (aucune IA, aucun service externe)
 - Import/export OPML des abonnements et catégories
-- Paramètres : mot de passe, articles par page, thème clair/sombre
+- Paramètres : mot de passe, chargement de 25 articles, thème clair/sombre
 - Interface accessible (clavier, focus visible, contraste) et mode PWA installable avec shell hors ligne
 
 ## Prérequis
