@@ -240,7 +240,7 @@ final readonly class RecommendationService
             $scored[] = [
                 'score' => $baseScore
                     + $this->freshnessScore($article)
-                    + ($this->randomizer->getFloat(0, 1) * 2 - 1) * self::JITTER,
+                    + (($this->randomizer->getInt(0, 1_000_000) / 1_000_000) * 2 - 1) * self::JITTER,
                 'article' => $article,
             ];
         }

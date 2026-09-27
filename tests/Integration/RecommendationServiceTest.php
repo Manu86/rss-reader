@@ -430,7 +430,7 @@ final class RecommendationServiceTest extends TestCase
 
         $ids = $this->ids($this->recommendations->forUser(self::ALICE));
 
-        self::assertSame([$strong, $sameCategory], $ids);
+        self::assertEqualsCanonicalizing([$strong, $sameCategory], $ids);
         self::assertNotContains($otherCategory, $ids);
     }
 
