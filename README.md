@@ -8,6 +8,13 @@ Lecteur RSS/Atom auto-hébergé et multi-utilisateur, développé en PHP, SQLite
 et JavaScript natif. Il propose une interface responsive installable comme
 PWA et une API JSON.
 
+## Captures d’écran
+
+<p align="center">
+  <img src="docs/screenshots/rss-reader-desktop-01.png" alt="Vue principale de RSS Reader" width="49%">
+  <img src="docs/screenshots/rss-reader-desktop-02.png" alt="Vue détaillée de RSS Reader" width="49%">
+</p>
+
 ## Fonctionnalités
 
 - Comptes isolés, sans inscription publique (premier compte créé à l'installation, autres comptes via CLI)
