@@ -397,7 +397,7 @@ a.reader-source-link:hover .reader-source-name { color: var(--accent); }
 
 .navigation-group { display: grid; gap: .2rem; min-width: 0; }
 .navigation-toggle { display: inline-grid; place-items: center; width: 1.85rem; height: 1.85rem; padding: 0; color: #a4b0b9; background: transparent; border: 1px solid transparent; border-radius: .35rem; cursor: pointer; opacity: 1; }
-.navigation-toggle .navigation-toggle-icon { color: #a4b0b9; stroke: #a4b0b9; }
+.navigation-toggle .navigation-toggle-icon { color: #c2cbd4; stroke: #c2cbd4; }
 .navigation-toggle:hover:not(:focus-visible) { color: var(--accent); background: transparent; border-color: var(--accent); opacity: .9; }
 .navigation-toggle-icon { width: 1.35rem; height: 1.35rem; stroke-width: 1.5; transition: transform .18s ease, opacity .18s ease; }
 .navigation-toggle[aria-expanded="true"] .navigation-toggle-icon { transform: rotate(90deg); opacity: .9; }
