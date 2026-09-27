@@ -388,6 +388,10 @@ function renderNavigation() {
         const currentListRoute = route.name === 'article'
             ? parseRoute(route.query.from || '#/')
             : route;
+        const filterContainer = dom.articleCategoryFilter.closest('.article-category-filter');
+        if (filterContainer) {
+            filterContainer.hidden = currentListRoute.name === 'feed';
+        }
         const categoryPage = currentListRoute.name === 'category' || currentListRoute.name === 'uncategorized';
         const categoryId = currentListRoute.name === 'category'
             ? Number(currentListRoute.params.id)
