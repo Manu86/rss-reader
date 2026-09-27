@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rss-reader-static-v76';
+const CACHE_NAME = 'rss-reader-static-v77';
 const STATIC_ASSETS = [
     '/',
     '/manifest.webmanifest',
@@ -19,10 +19,10 @@ const STATIC_ASSETS = [
     '/assets/icons/icon.svg',
     '/assets/icons/icon-192.svg',
     '/assets/icons/icon-512.svg',
-    '/assets/icons/icon-192.png',
-    '/assets/icons/icon-192-maskable.png',
-    '/assets/icons/icon-512.png',
-    '/assets/icons/icon-512-maskable.png',
+    '/assets/icons/icon-192.png?v=2',
+    '/assets/icons/icon-192-maskable.png?v=2',
+    '/assets/icons/icon-512.png?v=2',
+    '/assets/icons/icon-512-maskable.png?v=2',
 ];
 
 self.addEventListener('install', (event) => {
