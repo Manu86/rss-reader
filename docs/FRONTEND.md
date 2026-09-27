@@ -252,8 +252,8 @@ The frontend exposes:
 -   category;
 -   feed.
 
-Search queries the backend full-text endpoint and displays paginated
-results.
+Search queries the backend full-text endpoint and displays results through the
+same progressive batch loading as article lists.
 
 Do not implement a second client-side search index.
 

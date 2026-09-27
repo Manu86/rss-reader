@@ -39,7 +39,9 @@ CREATE TABLE user_settings (
 );
 ```
 
-Allowed page sizes and themes are controlled by the application.
+The `articles_per_page` column is retained for API compatibility and defaults to
+25, but the frontend always loads fixed batches of 25 articles. Allowed explicit
+API batch sizes and themes are controlled by the application.
 
 ## `categories`
 

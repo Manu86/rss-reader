@@ -63,7 +63,7 @@ model by `DATABASE.md`, and the synchronization/parsing rules by `RSS.md`.
 -   Retention: normal articles older than one year are removable; favorites
     exempt; dates and rules in `DATABASE.md` and `RSS.md`.
 -   OPML import and export, including categories.
--   Settings: password change, articles per page, light/dark theme,
+-   Settings: password change, fixed 25-article loads, light/dark theme,
     OPML import/export.
 -   PWA: installable with offline shell, no offline article storage, no
     push notifications, details in `PWA.md`.

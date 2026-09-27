@@ -286,10 +286,11 @@ Response:
 List responses should avoid returning full article content when
 unnecessary.
 
-The default `per_page` value comes from the authenticated user's settings.
-Allowed values are `10`, `25`, `50` and `100`. Invalid filters and batch-loading
-values return `422`. A referenced category or feed owned by another user
-behaves as `404`.
+The frontend always requests the default batch of 25 articles. The API also
+accepts an explicit `per_page` value of `10`, `25`, `50` or `100` for API
+clients that need another batch size; this value is not taken from user
+settings. Invalid filters and batch-loading values return `422`. A referenced
+category or feed owned by another user behaves as `404`.
 
 Each list item contains the article identifier, source feed summary (including
 its nullable `category` object with `id` and `name`), title,
@@ -329,9 +330,10 @@ updated detailed article representation. A foreign or missing article returns
 Returns up to twenty-four unread articles from the user's own feeds that resemble
 their recent favorites. The 24 articles are selected randomly from the 48 best
 eligible suggestions, computed only from local data (weighted FTS match against
-favorite titles and tags, plus affinity for shared tags and categories). Recent
-articles receive a small progressive freshness bonus, capped at one point over
-30 days.
+favorite titles and tags, plus affinity for shared tags and categories). FTS
+weights title, summary and content equally, while author matches receive a
+lower weight to avoid incidental author-only matches. Recent articles receive
+a small progressive freshness bonus, capped at one point over 30 days.
 The response is `{data: [<article>]}` with the same article representation as
 `GET /api/articles` and is returned in one response. The list is empty when the user has no
 favorite history or no relevant unread candidates exist. Repeated calls may
@@ -387,7 +389,9 @@ All aggregations are scoped server-side to the authenticated user.
 
 ### `GET /api/settings`
 
-Returns the authenticated user's V1 application settings:
+Returns the authenticated user's V1 application settings. The
+`articles_per_page` field is retained for API compatibility and does not alter
+the frontend's fixed 25-article batches:
 
 ``` json
 {"data":{"articles_per_page":25,"theme":"light"}}
@@ -402,7 +406,9 @@ server-side session.
 {"articles_per_page":25,"theme":"dark"}
 ```
 
-`articles_per_page` must be the JSON integer `10`, `25`, `50` or `100`.
+`articles_per_page` must be the JSON integer `10`, `25`, `50` or `100` for
+backward-compatible API clients; the frontend ignores this value and always
+loads 25 articles at a time.
 `theme` must be the JSON string `light` or `dark`. At least one field must
 be present and valid; both may be sent at once and only supplied fields
 are changed. The endpoint returns the updated settings, requires a valid

@@ -87,7 +87,7 @@ Services own business rules and transaction coordination.
 
 Repositories own SQL and always support user-scoped access.
 
-Article listing is paginated in SQLite and joins the source feed in one query;
+Article listing is loaded in SQLite batches and joins the source feed in one query;
 the frontend never loads all articles to filter them. Filter names are mapped
 through a server-side allowlist, and category/feed filters are ownership-checked
 before querying articles.
