@@ -40,7 +40,7 @@ final readonly class RecommendationService
      * affiché. Le bruit n'entre pas dans ce calcul, pour que l'inclusion reste
      * reproductible d'un chargement à l'autre.
      */
-    private const MIN_SCORE = 3.0;
+    private const MIN_SCORE = 2.0;
     private const RELEVANCE_WEIGHT = 3.0;
     private const FRESHNESS_WEIGHT = 1.0;
     private const FRESHNESS_WINDOW_SECONDS = 2_592_000;

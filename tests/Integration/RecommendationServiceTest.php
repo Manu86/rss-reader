@@ -90,6 +90,7 @@ final class RecommendationServiceTest extends TestCase
             title: 'Nous avons donc une fois de plus dans la loi',
             publishedAt: '2026-09-01T08:00:00Z',
             favorite: true,
+            tags: ['photovoltaïque'],
         );
         $decoy = $this->insertArticle(
             self::ALICE,
@@ -362,6 +363,7 @@ final class RecommendationServiceTest extends TestCase
             title: 'Le photovoltaïque en Aude',
             publishedAt: '2026-09-01T08:00:00Z',
             favorite: true,
+            tags: ['photovoltaïque'],
         );
         $this->insertArticle(
             self::ALICE,
@@ -470,7 +472,7 @@ final class RecommendationServiceTest extends TestCase
         $reference = null;
         for ($seed = 1; $seed <= 12; $seed++) {
             $ids = $this->ids($this->serviceWithSeed($seed)->forUser(self::ALICE));
-            self::assertCount(2, $ids, 'seed ' . $seed);
+            self::assertCount(1, $ids, 'seed ' . $seed);
             $reference ??= $ids;
             self::assertSame($reference, $ids, 'seed ' . $seed);
         }

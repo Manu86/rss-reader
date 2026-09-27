@@ -494,9 +494,31 @@ function createArticleImage(article) {
     const url = isObject(article) ? article.image_url : null;
     if (!isLocalMediaUrl(url)) {
         const faviconUrl = articleFeed(article).favicon_url;
-        return isLocalMediaUrl(faviconUrl)
-            ? viewEl('div', { className: 'reader-feed-favicon-visual' }, [createFavicon(article)])
-            : null;
+        if (!isLocalMediaUrl(faviconUrl)) {
+            return null;
+        }
+        return viewEl('button', {
+            className: 'reader-image-trigger reader-feed-favicon-trigger',
+            attrs: {
+                type: 'button',
+                'aria-label': 'Agrandir l’image de la source',
+                title: 'Agrandir l’image de la source',
+            },
+            onClick: () => {
+                const enlarged = viewEl('img', {
+                    className: 'reader-expanded-image',
+                    attrs: {
+                        src: textValue(faviconUrl),
+                        alt: sourceName(article),
+                    },
+                });
+                openDialog({
+                    title: 'Image de la source',
+                    content: enlarged,
+                    variant: 'image',
+                });
+            },
+        }, [viewEl('div', { className: 'reader-feed-favicon-visual' }, [createFavicon(article)])]);
     }
 
     let image = null;

@@ -172,6 +172,7 @@ a.reader-source-link:hover .reader-source-name { color: var(--accent); }
 .reader-article-image { display: block; width: auto; max-width: 100%; height: auto; margin-bottom: 1.25rem; object-fit: contain; border-radius: .7rem; }
 .reader-feed-favicon-visual { display: grid; place-items: center; width: 100%; min-height: 0; padding: 1rem; margin-bottom: 1.25rem; background: var(--accent-soft); border-radius: .7rem; }
 .reader-feed-favicon-visual .reader-favicon { width: 16rem; height: 16rem; font-size: 6rem; }
+.reader-feed-favicon-trigger { width: 100%; }
 .reader-expanded-image { display: block; width: auto; max-width: 100%; height: auto; max-height: 75vh; margin: 0 auto; object-fit: contain; }
 .reader-article-content { min-width: 0; max-width: 100%; overflow-wrap: anywhere; font-family: inherit; font-size: 1.05rem; line-height: 1.8; }
 .reader-article-content > * { max-width: 100%; }

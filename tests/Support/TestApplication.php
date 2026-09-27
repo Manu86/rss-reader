@@ -178,7 +178,6 @@ final readonly class TestApplication
                 $articleRepository,
                 $feedRepository,
                 $categoryRepository,
-                new UserSettingsRepository($this->pdo),
                 new ArticleCountRepository($this->pdo),
                 new FtsQueryBuilder(),
                 $clock,

@@ -199,6 +199,7 @@ test('le lecteur structure le texte en paragraphes sans injecter de HTML', () =>
     assert.match(css, /\.reader-article-content img\s*\{[^}]*max-width:\s*100%[^}]*height:\s*auto/);
     assert.match(reader, /reader-image-trigger/);
     assert.match(reader, /reader-feed-favicon-visual/);
+    assert.match(reader, /Agrandir l’image de la source/);
     assert.match(reader, /Agrandir l’image de l’article/);
     assert.match(reader, /variant: 'image'/);
     assert.ok(reader.includes('text.split(/\\n\\s*\\n/u)'));

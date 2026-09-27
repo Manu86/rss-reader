@@ -207,7 +207,6 @@ final class ApplicationFactory
             $articleRepository,
             $feedRepository,
             $categoryRepository,
-            new UserSettingsRepository($pdo),
             new ArticleCountRepository($pdo),
             new FtsQueryBuilder(),
             $clock,

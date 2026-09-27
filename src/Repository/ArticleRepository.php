@@ -215,7 +215,7 @@ final readonly class ArticleRepository
             new ArticleListCriteria('unread', $categoryId, $uncategorized, null, 1, $limit),
         );
         $statement = $this->pdo->prepare(
-            $this->articleColumns() . ', bm25(articles_fts) AS relevance FROM articles_fts '
+            $this->articleColumns() . ', bm25(articles_fts, 1.0, 1.0, 1.0, 0.1) AS relevance FROM articles_fts '
             . 'INNER JOIN articles a ON a.id = articles_fts.rowid '
             . 'INNER JOIN feeds f ON f.id = a.feed_id AND f.user_id = a.user_id '
             . 'LEFT JOIN categories c ON c.id = f.category_id AND c.user_id = f.user_id '

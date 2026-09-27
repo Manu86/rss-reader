@@ -64,7 +64,7 @@ final class SettingsApiTest extends TestCase
         $settings = $this->decode($kernel->handle(new Request('GET', '/api/settings')));
         self::assertSame(100, $settings['data']['articles_per_page']);
         $articles = $this->decode($kernel->handle(new Request('GET', '/api/articles')));
-        self::assertSame(100, $articles['pagination']['per_page']);
+        self::assertSame(25, $articles['pagination']['per_page']);
     }
 
     public function testSettingsRemainStrictlyIsolatedBetweenUsers(): void

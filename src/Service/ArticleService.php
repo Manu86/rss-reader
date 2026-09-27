@@ -13,7 +13,6 @@ use App\Repository\ArticleCountRepository;
 use App\Repository\ArticleRepository;
 use App\Repository\CategoryRepository;
 use App\Repository\FeedRepository;
-use App\Repository\UserSettingsRepository;
 
 final readonly class ArticleService
 {
@@ -28,7 +27,6 @@ final readonly class ArticleService
         private ArticleRepository $articles,
         private FeedRepository $feeds,
         private CategoryRepository $categories,
-        private UserSettingsRepository $settings,
         private ArticleCountRepository $counts,
         private FtsQueryBuilder $ftsQueryBuilder,
         private Clock $clock,
