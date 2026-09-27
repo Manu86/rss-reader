@@ -19,6 +19,7 @@ final readonly class ArticleService
 {
     /** @var list<int> */
     public const ALLOWED_PAGE_SIZES = [10, 25, 50, 100];
+    public const DEFAULT_PAGE_SIZE = 25;
 
     /** @var list<string> */
     public const ALLOWED_FILTERS = ['all', 'unread', 'read', 'favorites'];
@@ -153,7 +154,7 @@ final readonly class ArticleService
         if ($feedId !== null && $this->feeds->findOwned($feedId, $userId) === null) {
             throw new NotFoundException('Abonnement introuvable.');
         }
-        $perPage ??= $this->settings->articlesPerPage($userId);
+        $perPage ??= self::DEFAULT_PAGE_SIZE;
         if (!in_array($perPage, self::ALLOWED_PAGE_SIZES, true)) {
             throw new ValidationException(['per_page' => 'La taille de page demandée est invalide.']);
         }

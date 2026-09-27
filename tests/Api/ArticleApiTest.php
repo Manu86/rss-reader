@@ -244,7 +244,6 @@ final class ArticleApiTest extends TestCase
             false,
             false,
         );
-        $this->pdo->exec('UPDATE user_settings SET articles_per_page = 10 WHERE user_id = ' . $this->aliceId);
         [$kernel] = $this->authenticatedKernel('alice', 'correct horse battery staple');
 
         $response = $kernel->handle(new Request('GET', '/api/articles'));
@@ -254,7 +253,7 @@ final class ArticleApiTest extends TestCase
         self::assertSame([$newest, $older, $read], array_column($payload['data'], 'id'));
         self::assertSame([
             'page' => 1,
-            'per_page' => 10,
+            'per_page' => 25,
             'total_items' => 3,
             'total_pages' => 1,
         ], $payload['pagination']);

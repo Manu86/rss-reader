@@ -51,12 +51,13 @@ and article records.
 V1 provides:
 
 -   password change;
--   articles-per-load selection;
+-   a fixed 25-article load size for article lists;
 -   interface theme selection (light or dark);
 -   OPML import;
 -   OPML export.
 
-Suggested load sizes: 10, 25, 50, 100 articles. Default: 25.
+Article lists always load 25 articles before the infinite scroll requests the
+next batch.
 
 ## Categories
 
