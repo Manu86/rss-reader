@@ -97,6 +97,15 @@ test('le constructeur hash construit les routes et query connues', () => {
     assert.strictEqual(buildRoute('settings'), '/#/parametres');
 });
 
+test('Recommandé est la page par défaut', () => {
+    const expected = { name: 'recommendations', params: {}, query: {} };
+    assert.deepStrictEqual(DEFAULT_ROUTE, expected);
+    assert.deepStrictEqual(parseRoute(''), expected);
+    assert.deepStrictEqual(parseRoute('#/'), expected);
+    assert.deepStrictEqual(parseRoute('#/inconnu'), expected);
+    assert.strictEqual(buildRoute(DEFAULT_ROUTE.name), '/#/recommandations');
+});
+
 test('les routes construites sont réanalysables', () => {
     const routes = [
         buildRoute(),

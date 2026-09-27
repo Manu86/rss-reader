@@ -307,12 +307,15 @@ updated detailed article representation. A foreign or missing article returns
 
 ### `GET /api/recommendations`
 
-Returns up to eight unread articles from the user's own feeds that resemble
-their recent favorites, computed only from local data (FTS match on favorite
-titles, tag and category affinity). The response is `{data: [<article>]}` with
-the same article representation as `GET /api/articles` (no pagination). The
-list is empty when the user has no favorite history. No other user's data or
-external service is involved.
+Returns up to twenty-four unread articles from the user's own feeds that resemble
+their recent favorites, computed only from local data (weighted FTS match
+against favorite titles and tags, plus affinity for shared tags and categories).
+The response is `{data: [<article>]}` with the same article representation as
+`GET /api/articles` (no pagination). The list is empty when the user has no
+favorite history or no relevant unread candidates exist. The order applies a
+small bounded random jitter on the final score, so repeated calls may return
+the same articles in a different order. No other user's data or external
+service is involved.
 
 Optional query parameters `category_id=<id>` or
 `category=uncategorized` scope the suggestions to one owned category (or the

@@ -3,7 +3,7 @@ function route(name, params = {}, query = {}) {
 }
 
 function defaultRoute() {
-    return route('unread');
+    return route('recommendations');
 }
 
 function positiveId(value) {
@@ -87,7 +87,7 @@ function articleCategoryQuery(parameters) {
 }
 
 export const DEFAULT_ROUTE = Object.freeze({
-    name: 'unread',
+    name: 'recommendations',
     params: Object.freeze({}),
     query: Object.freeze({}),
 });

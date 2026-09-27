@@ -1,12 +1,12 @@
 import { ApiError, NetworkError, createApiClient } from './api/client.js?v=2';
 import { closeDialog } from './components/dialog.js';
 import { showToast } from './components/feedback.js';
-import { ManagementView } from './views/management.js?v=2';
+import { ManagementView } from './views/management.js?v=3';
 import { SettingsView } from './views/settings.js?v=3';
 import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js';
 import { createLoginView } from './views/login.js';
 import { ArticlesView } from './views/articles.js?v=26';
-import { ReaderView } from './views/reader.js?v=30';
+import { ReaderView } from './views/reader.js?v=31';
 import { buildRoute, parseRoute } from './router.js?v=26';
 import { errorMessage, el, icon, setChildren } from './utils/dom.js';
 
@@ -280,11 +280,11 @@ function renderNavigation() {
         dom.headerSettingsLink?.setAttribute('aria-current', 'page');
     }
     const main = [
+        ['Recommandé', buildRoute('recommendations'), 'recommendations', null],
         ['Tous', buildRoute('home'), 'home', countFor('global', 'all')],
         ['Non lus', buildRoute('unread'), 'unread', countFor('global', 'unread')],
         ['Lus', buildRoute('read'), 'read', countFor('global', 'read')],
         ['Favoris', buildRoute('favorites'), 'favorites', countFor('global', 'favorites')],
-        ['Recommandé', buildRoute('recommendations'), 'recommendations', null],
     ];
     setChildren(dom.mainNavigation, main.map(([label, href, name, count]) => navigationLink(
         label,

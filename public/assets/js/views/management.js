@@ -230,10 +230,6 @@ export class ManagementView {
         tabList.appendChild(feedTab);
         tabList.appendChild(categoryTab);
         view.appendChild(tabList);
-        const actions = this.renderHeaderActions();
-        if (actions.childElementCount > 0) {
-            view.appendChild(actions);
-        }
 
         const feedPanel = el('div', {
             id: feedPanelId,
@@ -300,7 +296,7 @@ export class ManagementView {
     }
 
     renderHeaderActions() {
-        const actions = el('div', { className: 'management-header-actions' });
+        const actions = el('div', { className: 'management-panel-actions' });
         if (this.activeTab === 'feeds') {
             const addCallback = callbackFor(this.callbacks, 'onAddFeed');
             const refreshCallback = callbackFor(this.callbacks, 'onRefreshAll');
@@ -357,11 +353,27 @@ export class ManagementView {
         ]);
     }
 
+    renderFeedsPanelToolbar() {
+        const toolbar = el('div', { className: 'management-panel-toolbar' });
+        if (this.state.feeds.length > 0) {
+            toolbar.appendChild(el('p', { className: 'panel-summary' }, `${formatNumber(this.state.feeds.length)} flux`));
+        }
+        const actions = this.renderHeaderActions();
+        if (actions.childElementCount > 0) {
+            toolbar.appendChild(actions);
+        }
+        return toolbar;
+    }
+
     renderFeedsPanel() {
         const panel = el('div', { className: 'management-panel-content' });
         if (this.state.feeds === undefined) {
             panel.appendChild(spinnerBlock('Chargement des flux…'));
             return panel;
+        }
+        const toolbar = this.renderFeedsPanelToolbar();
+        if (toolbar.childElementCount > 0) {
+            panel.appendChild(toolbar);
         }
         if (this.state.feeds.length === 0) {
             panel.appendChild(stateBlock('Aucun flux', 'Aucun flux pour le moment.', {
@@ -376,7 +388,6 @@ export class ManagementView {
             return panel;
         }
 
-        panel.appendChild(el('p', { className: 'panel-summary' }, `${formatNumber(this.state.feeds.length)} flux`));
         const filterControl = this.renderFeedCategoryFilter(`${this.instanceId}-category-filter`);
         const list = el('ul', { className: 'management-list feed-list', 'aria-label': 'Liste des flux' });
         const refreshList = () => {

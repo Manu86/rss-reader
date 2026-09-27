@@ -661,9 +661,9 @@ function articleTagList(article) {
     ])));
 }
 
-function renderBackButton(onBack) {
+function renderBackButton(onBack, extraClass = '') {
     return viewButton('Retour', {
-        className: 'reader-back-button button',
+        className: `reader-back-button button${extraClass === '' ? '' : ` ${extraClass}`}`,
         icon: 'left',
         attrs: { 'aria-label': 'Retour à la liste des articles' },
         onClick: () => {
@@ -961,6 +961,9 @@ export class ReaderView {
         bodyChildren.push(articleTagList(article));
         bodyChildren.push(renderExternalLink(article));
         bodyChildren.push(renderShareButton(article));
+        bodyChildren.push(viewEl('div', { className: 'reader-footer' }, [
+            renderBackButton(this.callbacks.onBack, 'reader-back-button-bottom'),
+        ]));
 
         return [
             viewEl('header', { className: 'reader-header' }, headerChildren),

@@ -39,6 +39,7 @@ Breakpoints are content-driven, not device-brand-specific.
 Primary entries:
 
 ``` text
+Recommandé
 Tous
 Non lus
 Lus
@@ -52,7 +53,7 @@ Flux
   Voir les flux
 ```
 
-The empty application route opens `Non lus` by default. `Tous` uses its own
+The empty application route opens `Recommandé` by default. `Tous` uses its own
 explicit route so the global article view remains directly accessible.
 
 Secondary actions:
@@ -147,6 +148,11 @@ Display:
 The publication date in the reader is followed by the same category badge as
 the article list, including `Sans catégorie` for uncategorized feeds.
 
+When the reader replaces the article list (mobile), the back action to the
+list appears both at the top and at the bottom of the article, using the same
+control and the same accessible name. On large screens the bottom action is
+hidden because the article list stays visible.
+
 Feed HTML must only be inserted through the sanitization contract from
 `SECURITY.md`.
 
@@ -187,11 +193,12 @@ article, after the content and before the external link and sharing:
 
 ## Recommendations
 
-The main navigation menu has a `Recommandé` item (`/#/recommandations`)
-opening a dedicated view that lists the backend suggestions as normal article
-cards: unread articles computed by the recommendation endpoint. With no
-suggestion, the view shows the standard empty state. Opening an article from
-the view keeps a working back navigation to the list.
+The main navigation menu has a `Recommandé` item (`/#/recommandations`) as its
+first entry, and it is the default view of the application. It opens a
+dedicated view that lists the backend suggestions as normal article cards:
+unread articles computed by the recommendation endpoint. With no suggestion,
+the view shows the standard empty state. Opening an article from the view
+keeps a working back navigation to the list.
 
 ## Filters and search
 
@@ -223,6 +230,10 @@ Users can:
 -   delete.
 
 Display retrieval status/error without exposing technical internals.
+
+In the feeds tab, the feed count and the panel actions (add a feed, refresh
+all) share a single row, with the actions aligned to the trailing edge on
+every screen width.
 
 Deletion requires confirmation.
 
@@ -328,6 +339,24 @@ Desktop, tablet and mobile must remain usable.
 Avoid horizontal scrolling for normal application controls.
 
 Touch targets must remain usable on small screens.
+
+## Typography
+
+Text must render identically in the browser and in the installed PWA.
+
+Use the platform UI font stack starting with `system-ui`. Do not reference a
+font that is not shipped with the application and do not load remote fonts:
+the shell CSP restricts `font-src` to the application origin.
+
+Use standard font weights only (multiples of 100). Fractional or unavailable
+weights are synthesized by the browser and render thin and inconsistent text
+across platforms.
+
+Set `text-size-adjust: 100%` so installed standalone windows do not inflate
+text or apply font boosting.
+
+Ship CSS changes through the service-worker cache version described in
+`PWA.md` so installed applications receive them.
 
 ## Dates and text
 

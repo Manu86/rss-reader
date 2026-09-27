@@ -153,17 +153,22 @@ A link opens the original article.
 ## Recommendations
 
 A `Recommandé` entry in the main navigation opens a dedicated view listing
-up to eight unread article suggestions:
+up to twenty-four unread article suggestions:
 
 - computed server-side from the user's own reading history only;
-- signals: FTS similarity between candidate articles and the titles of the
-  user's recent favorites, plus shared tags/categories between candidates and
-  favorites;
+- signals: a weighted blend of the user's recent favorites (their titles and
+  tags) matched via FTS against unread candidates, with additional weight for
+  shared tags and the same category as favorites;
 - candidates are unread articles of the user's own feeds, never favorited
   already, never other users' articles;
+- the selection favors the closest FTS matches and prefers articles that share
+  tags or categories with recent favorites;
+- the final order applies a small bounded random jitter (at most 0,6 point on a
+  score whose relevance weight is 3) so the same articles do not stay pinned at
+  the top of the view; a clearly stronger match still comes first;
 - no AI, no external service, no cross-user data;
 - the view shows the standard empty state when the user has no favorite
-  history.
+  history; the list may also be empty when no relevant unread article is found.
 
 ## Article tags
 

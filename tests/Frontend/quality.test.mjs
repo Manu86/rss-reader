@@ -173,3 +173,76 @@ test('le lecteur structure le texte en paragraphes sans injecter de HTML', () =>
     assert.doesNotMatch(reader, /innerHTML|insertAdjacentHTML/);
     assert.doesNotMatch(css, /\.reader-article-content p\s*\{[^}]*white-space:\s*pre-wrap/);
 });
+
+test('la typographie reste identique dans le navigateur et dans la PWA installée', () => {
+    const css = read('assets/css/app.css');
+    assert.match(css, /font-family:\s*system-ui/);
+    assert.doesNotMatch(css, /@import|@font-face|fonts\.(?:googleapis|gstatic)/);
+
+    // Empêche le font boosting et l'inflation de texte en mode standalone.
+    assert.match(css, /html\s*\{[^}]*-webkit-text-size-adjust:\s*100%[^}]*text-size-adjust:\s*100%/);
+
+    // Les graisses non standard sont synthétisées par le navigateur et rendent
+    // le texte trop fin sur les polices système.
+    const weights = Array.from(css.matchAll(/font-weight:\s*([0-9]+)/g), (match) => Number(match[1]));
+    assert.ok(weights.length > 0);
+    for (const weight of weights) {
+        assert.ok(weight % 100 === 0, `graisse non standard (synthétisée par le navigateur) : ${weight}`);
+    }
+});
+
+test('les actions de l’onglet Flux partagent la ligne du nombre de flux, alignées à droite', () => {
+    const css = read('assets/css/app.css');
+    const management = read('assets/js/views/management.js');
+
+    assert.match(css, /\.management-panel-toolbar\s*\{[^}]*display:\s*flex[^}]*justify-content:\s*space-between/);
+    assert.match(css, /\.management-panel-actions\s*\{[^}]*margin-left:\s*auto/);
+    assert.match(css, /\.management-panel-toolbar \.panel-summary\s*\{[^}]*margin:\s*0/);
+    assert.doesNotMatch(css, /management-header-actions/);
+
+    const toolbar = management.slice(
+        management.indexOf('renderFeedsPanelToolbar()'),
+        management.indexOf('renderFeedsPanel()', management.indexOf('renderFeedsPanelToolbar()')),
+    );
+    assert.match(toolbar, /className: 'management-panel-toolbar'/);
+    assert.match(toolbar, /className: 'panel-summary'/);
+    assert.match(toolbar, /renderHeaderActions\(\)/);
+
+    const panel = management.slice(management.indexOf('renderFeedsPanel()'));
+    assert.ok(panel.indexOf('renderFeedsPanelToolbar()') < panel.indexOf('stateBlock('));
+    assert.doesNotMatch(management, /management-header-actions/);
+});
+
+test('le lecteur mobile propose un retour en bas d’article, comme en haut', () => {
+    const css = read('assets/css/app.css');
+    const reader = read('assets/js/views/reader.js');
+
+    const footer = reader.slice(reader.indexOf("viewEl('div', { className: 'reader-footer' }"));
+    assert.match(footer, /className: 'reader-footer'/);
+    assert.match(footer, /renderBackButton\(this\.callbacks\.onBack, 'reader-back-button-bottom'\)/);
+
+    // Le pied de lecture est le dernier élément du corps de l'article.
+    const body = reader.slice(reader.indexOf('_articleChildren(article)'));
+    assert.ok(
+        body.indexOf("className: 'reader-footer'") > body.indexOf('renderShareButton(article)'),
+        'le retour du pied doit suivre les actions de partage',
+    );
+
+    assert.match(css, /\.reader-footer\s*\{[^}]*display:\s*flex[^}]*margin-top/);
+    assert.match(css, /@media\s*\(min-width:\s*70\.0625rem\)\s*\{\s*\.reader-back-button-bottom\s*\{\s*display:\s*none/);
+});
+
+test('la navigation place Recommandé en première position', () => {
+    const app = read('assets/js/app.js');
+    const main = app.match(/const main = \[([\s\S]*?)\n    \];/);
+    assert.ok(main, 'la liste principale de navigation est introuvable');
+    const entries = Array.from(main[1].matchAll(/'([^']+)', buildRoute\('([^']+)'\)/g))
+        .map((match) => ({ label: match[1], route: match[2] }));
+    assert.deepStrictEqual(entries, [
+        { label: 'Recommandé', route: 'recommendations' },
+        { label: 'Tous', route: 'home' },
+        { label: 'Non lus', route: 'unread' },
+        { label: 'Lus', route: 'read' },
+        { label: 'Favoris', route: 'favorites' },
+    ]);
+});

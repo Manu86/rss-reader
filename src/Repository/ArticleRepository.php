@@ -197,6 +197,50 @@ final readonly class ArticleRepository
         return $articles;
     }
 
+    /**
+     * Unread articles of the user matching the FTS query, with their FTS
+     * relevance (`-bm25`, so a higher value means a closer match).
+     *
+     * @return list<array{article: Article, relevance: float}>
+     */
+    public function searchUnreadOwnedWithRelevance(
+        int $userId,
+        ?int $categoryId,
+        bool $uncategorized,
+        string $ftsQuery,
+        int $limit,
+    ): array {
+        [$where, $parameters] = $this->listWhere(
+            $userId,
+            new ArticleListCriteria('unread', $categoryId, $uncategorized, null, 1, $limit),
+        );
+        $statement = $this->pdo->prepare(
+            $this->articleColumns() . ', bm25(articles_fts) AS relevance FROM articles_fts '
+            . 'INNER JOIN articles a ON a.id = articles_fts.rowid '
+            . 'INNER JOIN feeds f ON f.id = a.feed_id AND f.user_id = a.user_id '
+            . 'LEFT JOIN categories c ON c.id = f.category_id AND c.user_id = f.user_id '
+            . 'WHERE articles_fts MATCH :search AND ' . $where
+            . ' ORDER BY relevance, COALESCE(a.published_at, a.discovered_at) DESC, a.id DESC'
+            . ' LIMIT :limit'
+        );
+        $statement->bindValue(':search', $ftsQuery, PDO::PARAM_STR);
+        foreach ($parameters as $name => $value) {
+            $statement->bindValue(':' . $name, $value, PDO::PARAM_INT);
+        }
+        $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $statement->execute();
+
+        $matches = [];
+        while (($row = $statement->fetch()) !== false) {
+            $article = $this->hydrate($row);
+            if ($article !== null) {
+                $matches[] = ['article' => $article, 'relevance' => -1.0 * (float) $row['relevance']];
+            }
+        }
+
+        return $matches;
+    }
+
     public function countSearchOwned(int $userId, ArticleListCriteria $criteria, string $ftsQuery): int
     {
         [$where, $parameters] = $this->listWhere($userId, $criteria);
