@@ -31,8 +31,17 @@ jobs:
             -   name: Install frontend test dependencies
                 run: npm ci
 
-            -   name: composer check (lint + analyse statique + tests)
-                run: composer check
+            -   name: PHP formatting
+                run: composer cs:check
+
+            -   name: PHP and frontend lint
+                run: composer lint
+
+            -   name: Static analysis
+                run: composer analyse
+
+            -   name: PHP tests
+                run: composer test
 
             -   name: Frontend tests
                 run: |
