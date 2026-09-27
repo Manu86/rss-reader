@@ -19,10 +19,10 @@ const STATIC_ASSETS = [
     '/assets/icons/icon.svg',
     '/assets/icons/icon-192.svg',
     '/assets/icons/icon-512.svg',
-    '/assets/icons/icon-192.png?v=2',
-    '/assets/icons/icon-192-maskable.png?v=2',
-    '/assets/icons/icon-512.png?v=2',
-    '/assets/icons/icon-512-maskable.png?v=2',
+    '/assets/icons/icon-192-v2.png',
+    '/assets/icons/icon-192-maskable-v2.png',
+    '/assets/icons/icon-512-v2.png',
+    '/assets/icons/icon-512-maskable-v2.png',
 ];
 
 self.addEventListener('install', (event) => {
