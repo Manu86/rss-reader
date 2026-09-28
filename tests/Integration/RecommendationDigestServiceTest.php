@@ -108,6 +108,26 @@ final class RecommendationDigestServiceTest extends TestCase
         self::assertNull($this->lastSentAt(1));
     }
 
+    public function testTheDigestAsksForAtMostTwentyFourArticles(): void
+    {
+        $this->insertRecipient(1, 'daily', '2026-09-27T06:00:00Z');
+        $provider = $this->provider([1 => array_map(
+            fn(int $id): Article => $this->article($id),
+            range(1, 40),
+        )]);
+        $mailer = $this->mailer();
+        $service = new RecommendationDigestService(
+            new RecommendationEmailRepository($this->pdo),
+            $provider,
+            $mailer,
+            new FrozenClock(new DateTimeImmutable('2026-09-28T06:00:00Z')),
+        );
+
+        self::assertSame(1, $service->run()['sent']);
+        self::assertSame([24], $provider->limits);
+        self::assertCount(24, $mailer->deliveries[0][1]);
+    }
+
     public function testMissingMailerDisablesDeliveryWithoutReadingRecipients(): void
     {
         $this->insertRecipient(1, 'daily', null);
@@ -158,16 +178,32 @@ final class RecommendationDigestServiceTest extends TestCase
         ]);
     }
 
-    /** @param array<int, list<Article>> $articles */
-    private function provider(array $articles): RecommendationProvider
+    /**
+     * Le double respecte la limite demandee, comme le vrai service, et expose
+     * les limites recues pour que les tests puissent les verifier.
+     *
+     * @param array<int, list<Article>> $articles
+     * @return RecommendationProvider&object{limits: list<int|null>}
+     */
+    private function provider(array $articles): object
     {
         return new class ($articles) implements RecommendationProvider {
+            /** @var list<int|null> */
+            public array $limits = [];
+
             /** @param array<int, list<Article>> $articles */
             public function __construct(private array $articles) {}
 
-            public function forUser(int $userId, ?int $categoryId = null, bool $uncategorized = false): array
-            {
-                return $this->articles[$userId] ?? [];
+            public function forUser(
+                int $userId,
+                ?int $categoryId = null,
+                bool $uncategorized = false,
+                ?int $limit = null,
+            ): array {
+                $this->limits[] = $limit;
+                $articles = $this->articles[$userId] ?? [];
+
+                return $limit === null ? $articles : array_slice($articles, 0, $limit);
             }
         };
     }
@@ -213,8 +249,12 @@ final class RecordingDigestMailer implements RecommendationDigestMailer
     /** @var list<int> */
     public array $sent = [];
 
+    /** @var list<array{int, list<Article>}> */
+    public array $deliveries = [];
+
     public function send(RecommendationEmailRecipient $recipient, array $articles): void
     {
         $this->sent[] = $recipient->userId;
+        $this->deliveries[] = [$recipient->userId, $articles];
     }
 }

@@ -123,6 +123,13 @@ test('les interactions essentielles exposent un comportement clavier et des noms
     assert.match(html, /<div id="navigation-backdrop"[^>]*aria-hidden="true"/);
     assert.match(html, /id="utility-pane"[^>]*aria-label="Outils"/);
     assert.doesNotMatch(html, /aria-labelledby="utility-title"/);
+    assert.match(html, /id="add-category-button"[^>]*aria-label="Ajouter une catégorie"/);
+    assert.match(html, /id="add-feed-button"[^>]*aria-label="Ajouter un flux"/);
+    assert.match(html, /id="header-add-feed-button"[^>]*aria-label="Ajouter un flux"/);
+    assert.doesNotMatch(html, /id="header-settings-link"/);
+    assert.match(app, /dom\.addFeed\.addEventListener\('click', \(\) => openAddFeed\(\)\)/);
+    assert.match(app, /dom\.headerAddFeed\.addEventListener\('click', \(\) => openAddFeed\(\)\)/);
+    assert.doesNotMatch(app, /headerSettingsLink/);
     assert.match(app, /event\.key === 'Escape'[\s\S]*closeNavigation\(true\)/);
     assert.match(app, /function focusRoute\(/);
     assert.match(app, /element\.inert = inert/);

@@ -327,14 +327,19 @@ updated detailed article representation. A foreign or missing article returns
 
 ### `GET /api/recommendations`
 
-Returns up to twenty-four unread articles from the user's own feeds that resemble
-their recent favorites. The 24 articles are selected randomly from the 48 best
+Returns up to forty-eight unread articles from the user's own feeds that resemble
+their recent favorites. The 48 articles are selected randomly from the 96 best
 eligible suggestions, computed only from local data (weighted FTS match against
 favorite titles and tags, plus affinity for shared tags and categories). FTS
 weights title, summary and content equally, while author matches receive a
 lower weight to avoid incidental author-only matches. Recent articles receive
 a small progressive freshness bonus, capped at one point over 15 days.
-The response is `{data: [<article>]}` with the same article representation as
+No single feed may occupy more than five of the returned articles, so the
+response may contain fewer than forty-eight articles when the user follows fewer
+than ten sources with eligible articles. The returned articles are ordered from
+the most recent to the oldest publication, falling back to the discovery date.
+The response is
+`{data: [<article>]}` with the same article representation as
 `GET /api/articles` and is returned in one response. The list is empty when the user has no
 favorite history or no relevant unread candidates exist. Repeated calls may
 return different articles from the pool. No other user's data or external

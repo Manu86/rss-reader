@@ -69,12 +69,24 @@ Lus
 Favoris
 
 Catégories
+  +
   ...
   Sans catégorie
 
 Flux
+  +
   Voir les flux
 ```
+
+The `Catégories` and `Flux` headings each expose an icon button in the heading
+row, in the same visual style, that opens the creation dialog of that section
+directly. Each button carries an accessible name and a tooltip naming what it
+adds, because the `+` icon alone conveys nothing to assistive technology.
+
+The header actions expose the same `Ajouter un flux` button, which replaces the
+previous settings shortcut there. Settings stay reachable from the sidebar, so
+no route is lost. Like the refresh button, the header action is hidden on narrow
+viewports where the sidebar is the primary way to reach these actions.
 
 The empty application route opens `Recommandé` by default. `Tous` uses its own
 explicit route so the global article view remains directly accessible.
@@ -94,7 +106,6 @@ accessible text.
 Secondary actions:
 
 ``` text
-Ajouter un flux
 Paramètres
 Déconnexion
 ```

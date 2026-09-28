@@ -38,6 +38,11 @@ final class RecommendationServiceTest extends TestCase
         $this->insertFeed(10, self::ALICE, self::CATEGORY_NEWS);
         $this->insertFeed(11, self::ALICE, null);
         $this->insertFeed(20, self::ALICE, self::CATEGORY_ENERGY);
+        // Suffisamment de sources pour que le plafond de 5 articles par flux
+        // n'impose pas de reduire la liste dans les tests de volume.
+        foreach (range(40, 50) as $feedId) {
+            $this->insertFeed($feedId, self::ALICE, self::CATEGORY_NEWS);
+        }
         $this->insertFeed(30, self::BOB, null);
         $this->recommendations = $this->serviceWithSeed(1);
     }
@@ -106,7 +111,7 @@ final class RecommendationServiceTest extends TestCase
         self::assertNotContains($decoy, $ids);
     }
 
-    public function testClosestFtsMatchIsRankedFirstEvenWhenItIsOlder(): void
+    public function testTheClosestFtsMatchIsSelectedEvenWhenItIsOlder(): void
     {
         $this->insertArticle(
             self::ALICE,
@@ -131,7 +136,45 @@ final class RecommendationServiceTest extends TestCase
 
         $ids = $this->ids($this->recommendations->forUser(self::ALICE));
 
-        self::assertSame([$strongMatch, $weakMatch], $ids);
+        // Le score décide de la sélection : le match le plus proche est retenu
+        // malgré son âge. Seule la présentation suit la date.
+        self::assertCount(2, $ids);
+        self::assertContains($strongMatch, $ids);
+        self::assertContains($weakMatch, $ids);
+        self::assertSame([$weakMatch, $strongMatch], $ids);
+    }
+
+    public function testRecommendationsAreDisplayedFromTheMostRecentToTheOldest(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            11,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        $oldest = $this->insertArticle(
+            self::ALICE,
+            10,
+            title: 'Photovoltaïque ancien',
+            publishedAt: '2026-09-02T08:00:00Z',
+        );
+        $newest = $this->insertArticle(
+            self::ALICE,
+            20,
+            title: 'Photovoltaïque récent',
+            publishedAt: '2026-09-20T08:00:00Z',
+        );
+        $middle = $this->insertArticle(
+            self::ALICE,
+            40,
+            title: 'Photovoltaïque intermédiaire',
+            publishedAt: '2026-09-11T08:00:00Z',
+        );
+
+        $ids = $this->ids($this->recommendations->forUser(self::ALICE));
+
+        self::assertSame([$newest, $middle, $oldest], $ids);
     }
 
     public function testReadFavoriteAndOtherUserArticlesAreNeverRecommended(): void
@@ -206,7 +249,7 @@ final class RecommendationServiceTest extends TestCase
         self::assertNotContains($energy, $ids);
     }
 
-    public function testTheListNeverExceedsTwentyFourArticles(): void
+    public function testNoFeedOccupiesMoreThanFivePlaces(): void
     {
         $this->insertArticle(
             self::ALICE,
@@ -215,14 +258,27 @@ final class RecommendationServiceTest extends TestCase
             publishedAt: '2026-09-01T08:00:00Z',
             favorite: true,
         );
-        $this->insertEquallyScoredCandidates(30);
+        // Un seul flux produit 40 candidats éligibles.
+        for ($index = 1; $index <= 40; $index++) {
+            $this->insertArticle(
+                self::ALICE,
+                10,
+                title: 'Dossier ' . $index,
+                publishedAt: sprintf('2026-09-%02dT08:00:00Z', ($index % 28) + 1),
+                author: 'Photovoltaïque ' . $index,
+            );
+        }
 
         $recommendations = $this->recommendations->forUser(self::ALICE);
 
-        self::assertCount(24, $recommendations);
+        self::assertCount(5, $recommendations);
+        self::assertSame([10], array_values(array_unique(array_map(
+            static fn(Article $article): int => $article->feedId,
+            $recommendations,
+        ))));
     }
 
-    public function testTwentyFourArticlesAreDrawnFromTheRecommendationPool(): void
+    public function testAFewFeedsReturnFewerThanFortyEightArticles(): void
     {
         $this->insertArticle(
             self::ALICE,
@@ -231,12 +287,62 @@ final class RecommendationServiceTest extends TestCase
             publishedAt: '2026-09-01T08:00:00Z',
             favorite: true,
         );
-        $this->insertEquallyScoredCandidates(48);
+        foreach ([10, 20] as $feedId) {
+            for ($index = 1; $index <= 6; $index++) {
+                $this->insertArticle(
+                    self::ALICE,
+                    $feedId,
+                    title: 'Dossier ' . $feedId . '-' . $index,
+                    publishedAt: sprintf('2026-09-%02dT08:00:00Z', $index),
+                    author: 'Photovoltaïque ' . $feedId . $index,
+                );
+            }
+        }
+
+        // Deux sources et un plafond de 5 : la liste reste volontairement
+        // courte, meme a 48 places.
+        $recommendations = $this->recommendations->forUser(self::ALICE);
+
+        self::assertCount(10, $recommendations);
+        self::assertSame([10, 20], array_values(array_unique(array_map(
+            static fn(Article $article): int => $article->feedId,
+            $recommendations,
+        ))));
+    }
+
+    public function testTheListNeverExceedsFortyEightArticles(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            11,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        $this->insertEquallyScoredCandidates(90);
+
+        $recommendations = $this->recommendations->forUser(self::ALICE);
+
+        self::assertCount(48, $recommendations);
+    }
+
+    public function testFortyEightArticlesAreDrawnFromTheRecommendationPool(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            11,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        // 13 sources x 5 places : le pool atteint 65 candidats, largement plus
+        // que les 48 places affichees, donc le tirage Aleatoire reste visible.
+        $this->insertEquallyScoredCandidates(65);
 
         $lists = [];
         for ($seed = 1; $seed <= 4; $seed++) {
             $ids = $this->ids($this->serviceWithSeed($seed)->forUser(self::ALICE));
-            self::assertCount(24, $ids, 'seed ' . $seed);
+            self::assertCount(48, $ids, 'seed ' . $seed);
             $lists[] = $ids;
         }
 
@@ -244,6 +350,21 @@ final class RecommendationServiceTest extends TestCase
             static fn(array $ids): string => implode(',', $ids),
             $lists,
         ))));
+    }
+
+    public function testACallerCanRequestFewerArticlesThanTheView(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            11,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        $this->insertEquallyScoredCandidates(65);
+
+        self::assertCount(48, $this->recommendations->forUser(self::ALICE));
+        self::assertCount(24, $this->recommendations->forUser(self::ALICE, null, false, 24));
     }
 
     public function testRankingIsReproducibleForAGivenSeed(): void
@@ -263,7 +384,7 @@ final class RecommendationServiceTest extends TestCase
         self::assertSame($first, $second);
     }
 
-    public function testRankingChangesBetweenCallsSoTheTopIsNotAlwaysTheSame(): void
+    public function testSelectionChangesBetweenCallsSoTheSameArticlesAreNotAlwaysShown(): void
     {
         $this->insertArticle(
             self::ALICE,
@@ -272,16 +393,30 @@ final class RecommendationServiceTest extends TestCase
             publishedAt: '2026-09-01T08:00:00Z',
             favorite: true,
         );
-        $this->insertEquallyScoredCandidates();
-
-        $firsts = [];
-        for ($seed = 1; $seed <= 8; $seed++) {
-            $recommendations = $this->serviceWithSeed($seed)->forUser(self::ALICE);
-            self::assertCount(5, $recommendations);
-            $firsts[] = $recommendations[0]->id;
+        // Plus de candidats que le pool, sur assez de sources pour le remplir
+        // entierement : le bruit de score, puis le tirage, font varier la
+        // selection d'un appel a l'autre.
+        $feeds = [10, 20, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50];
+        foreach ($feeds as $feedId) {
+            for ($index = 1; $index <= 12; $index++) {
+                $this->insertArticle(
+                    self::ALICE,
+                    $feedId,
+                    title: 'Dossier ' . $feedId . '-' . $index,
+                    publishedAt: sprintf('2026-09-%02dT08:00:00Z', (($feedId * $index) % 28) + 1),
+                    author: 'Photovoltaïque ' . $feedId . $index,
+                );
+            }
         }
 
-        self::assertGreaterThan(1, count(array_unique($firsts)));
+        $selections = [];
+        for ($seed = 1; $seed <= 8; $seed++) {
+            $ids = $this->ids($this->serviceWithSeed($seed)->forUser(self::ALICE));
+            self::assertCount(48, $ids, 'seed ' . $seed);
+            $selections[] = implode(',', $ids);
+        }
+
+        self::assertGreaterThan(1, count(array_unique($selections)));
     }
 
     public function testTheFreshnessBonusIsExhaustedAfterFifteenDays(): void
@@ -308,25 +443,21 @@ final class RecommendationServiceTest extends TestCase
 
         // Les deux candidats ont le meme score deterministe : le bonus de
         // fraicheur est epuise au-dela de 15 jours. Son amplitude maximale (1)
-        // reste inferieure au bruit maximal (0,6 par article), donc la fraicheur
-        // oriente le classement sans jamais le decider a elle seule. On verifie
-        // les deux proprietes : l'age n'exclut aucun candidat eligible, et le
-        // plus recent passe devant dans la majorite des tirages.
-        $recentFirst = 0;
-        $olderFirst = 0;
+        // L'age n'exclut aucun candidat eligible : le bonus s'epuise au-dela de
+        // 15 jours, il ne retire pas l'article de la liste.
         for ($seed = 1; $seed <= 20; $seed++) {
             $ids = $this->ids($this->serviceAt(new DateTimeImmutable('2026-09-28T12:00:00Z'), $seed)
                 ->forUser(self::ALICE));
             self::assertContains($withinWindow, $ids, 'seed ' . $seed);
             self::assertContains($beyondWindow, $ids, 'seed ' . $seed);
-            if ($ids[0] === $withinWindow) {
-                ++$recentFirst;
-            } else {
-                ++$olderFirst;
-            }
         }
 
-        self::assertGreaterThan($olderFirst, $recentFirst);
+        // Le frais garde en plus un point de score, ce qui le fait passer devant
+        // l'ancien malgre le bruit. L'ecart de fraicheur vaut exactement 1 point
+        // ici, donc il domine les 0,6 de bruit cumules de deux articles.
+        $ids = $this->ids($this->serviceAt(new DateTimeImmutable('2026-09-28T12:00:00Z'), 1)
+            ->forUser(self::ALICE));
+        self::assertSame([$withinWindow, $beyondWindow], $ids);
     }
 
     public function testTheCategoryBonusIsNeverOvercomeByTheJitter(): void
@@ -527,12 +658,13 @@ final class RecommendationServiceTest extends TestCase
 
     private function insertEquallyScoredCandidates(int $count = 5): void
     {
+        $feedIds = array_values(array_unique(array_merge([10, 20], range(40, 50))));
         for ($index = 1; $index <= $count; $index++) {
             $this->insertArticle(
                 self::ALICE,
-                10,
+                $feedIds[($index - 1) % count($feedIds)],
                 title: 'Dossier ' . $index,
-                publishedAt: sprintf('2026-09-%02dT08:00:00Z', $index),
+                publishedAt: sprintf('2026-09-%02dT08:00:00Z', ($index % 28) + 1),
                 author: 'Photovoltaïque ' . $index,
             );
         }

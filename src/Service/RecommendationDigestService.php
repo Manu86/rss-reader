@@ -15,6 +15,12 @@ final readonly class RecommendationDigestService
 {
     private const TIMEZONE = 'Europe/Paris';
     private const SEND_HOUR = 8;
+    /**
+     * Le digest reste plafonne a 24 articles alors que la vue web en propose 48.
+     * Un message qui double de volume est plus expose aux filtres antispam, et
+     * la liste garde de toute facon le nombre d'articles a lire au daily.
+     */
+    private const ARTICLE_LIMIT = 24;
 
     public function __construct(
         private RecommendationEmailRepository $recipients,
@@ -46,7 +52,12 @@ final readonly class RecommendationDigestService
             }
             ++$summary['due'];
             try {
-                $articles = $this->recommendations->forUser($recipient->userId);
+                $articles = $this->recommendations->forUser(
+                    $recipient->userId,
+                    null,
+                    false,
+                    self::ARTICLE_LIMIT,
+                );
                 if ($articles === []) {
                     ++$summary['empty'];
                     continue;

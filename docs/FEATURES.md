@@ -73,7 +73,10 @@ the exact boundary, the first later run in the same period sends the digest.
 No message is sent when there are no recommendations. A successful delivery is
 recorded so the same user receives at most one digest per selected period; a
 failed or empty delivery remains eligible for a later hourly run.
-Each recommended article uses the same information hierarchy as the web list:
+Each digest contains at most 24 articles, while the web view lists up to 48, so
+a larger message cannot increase deliverability risk or the daily reading load.
+The email uses the same selection as the web list. Each recommended article uses
+the same information hierarchy as the web list:
 source, title, publication date and category. The email uses self-contained
 styles suitable for mail clients, embeds locally stored article thumbnails and
 links each card back to the application. Email thumbnails are center-cropped to
@@ -200,7 +203,7 @@ A link opens the original article.
 ## Recommendations
 
 A `Recommandé` entry in the main navigation opens a dedicated view listing
-up to twenty-four unread article suggestions:
+up to forty-eight unread article suggestions:
 
 - computed server-side from the user's own reading history only;
 - signals: a weighted blend of the user's recent favorites (their titles and
@@ -217,18 +220,30 @@ up to twenty-four unread article suggestions:
   jitter, so the selection is reproducible between two identical loads;
 - the selection favors the closest FTS matches and prefers articles that share
   tags or categories with recent favorites;
+- the selected articles are displayed from the most recent to the oldest,
+  falling back to the discovery date when no publication date is available.
+  Score drives which articles are selected, date drives how they are presented;
 - a freshness bonus of up to +1 point favors recent articles and decreases
   progressively over 15 days; age affects ranking but does not by itself
   exclude an eligible article;
-- the 48 best eligible suggestions form a pool, from which 24 are selected at
+- no single feed may occupy more than five places in the pool, therefore in the
+  view: a feed close to the user's favorites and rich in articles cannot take the
+  whole list. The limit is applied when building the pool, since capping only the
+  displayed articles would let one feed fill the pool. As a direct consequence,
+  the view returns fewer than 48 articles when the user follows fewer than ten
+  sources with eligible articles, and the empty state is not involved: the list
+  is simply shorter;
+- the 96 best eligible suggestions form a pool, from which 48 are selected at
   random for display; a small bounded random jitter (at most 0,6 point on a
   score whose relevance weight is 3) is applied before building the pool so
-  equally close matches can vary;
+  equally close matches can vary. The pool is deliberately larger than the
+  displayed list so the random draw stays meaningful; with an equally sized pool
+  the draw would return the whole pool and the variety would be lost;
 - no AI, no external service, no cross-user data;
 - the view shows the standard empty state when the user has no favorite
   history; the list may also be empty when no relevant unread article is found
-  or when none of them reaches the minimum score. At most 24 articles are
-  returned. When more than 24 suggestions are eligible, the response does
+  or when none of them reaches the minimum score. At most 48 articles are
+  returned. When more than 48 suggestions are eligible, the response does
   not expose the total number of eligible suggestions.
 
 ## Article tags

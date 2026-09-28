@@ -24,9 +24,18 @@ use Random\Randomizer;
 final readonly class RecommendationService implements RecommendationProvider
 {
     private const FAVORITE_SIGNAL_LIMIT = 20;
-    private const CANDIDATE_LIMIT = 60;
-    private const RECOMMENDATION_POOL_LIMIT = 48;
-    private const RECOMMENDATION_LIMIT = 24;
+    private const CANDIDATE_LIMIT = 120;
+    private const RECOMMENDATION_POOL_LIMIT = 96;
+    private const RECOMMENDATION_LIMIT = 48;
+    /**
+     * Nombre maximal d'articles qu'un seul flux peut occuper dans le pool, donc
+     * dans la vue. Sans cette limite, un flux proche des favoris et riche en
+     * articles peut occuper la liste entière, alors que d'autres sources
+     * comparables restent invisibles. Consequence assumée : la liste affiche
+     * moins de 48 articles quand l'utilisateur compte moins de dix sources
+     * possédant des articles éligibles.
+     */
+    private const MAX_PER_FEED = 5;
     private const TITLE_TERM_LIMIT_PER_FAVORITE = 6;
     private const TITLE_TERM_LIMIT = 30;
     private const TAG_TERM_LIMIT = 30;
@@ -80,8 +89,12 @@ final readonly class RecommendationService implements RecommendationProvider
     ) {}
 
     /** @return list<Article> */
-    public function forUser(int $userId, ?int $categoryId = null, bool $uncategorized = false): array
-    {
+    public function forUser(
+        int $userId,
+        ?int $categoryId = null,
+        bool $uncategorized = false,
+        ?int $limit = null,
+    ): array {
         if ($categoryId !== null && !$this->categories->existsOwned($categoryId, $userId)) {
             throw new NotFoundException('Catégorie introuvable.');
         }
@@ -104,7 +117,7 @@ final readonly class RecommendationService implements RecommendationProvider
             return [];
         }
 
-        return $this->rank($matches, $signals);
+        return $this->rank($matches, $signals, $limit ?? self::RECOMMENDATION_LIMIT);
     }
 
     /**
@@ -186,7 +199,7 @@ final readonly class RecommendationService implements RecommendationProvider
      * @param list<array{id: int, title: string, tags: list<string>, category_id: int|null}> $signals
      * @return list<Article>
      */
-    private function rank(array $matches, array $signals): array
+    private function rank(array $matches, array $signals, int $limit): array
     {
         $favoriteTags = [];
         $favoriteCategories = [];
@@ -256,20 +269,68 @@ final readonly class RecommendationService implements RecommendationProvider
             return $byDate !== 0 ? $byDate : $left['article']->id <=> $right['article']->id;
         });
 
-        $pool = array_slice($scored, 0, self::RECOMMENDATION_POOL_LIMIT);
-        if (count($pool) <= self::RECOMMENDATION_LIMIT) {
-            return array_map(
-                static fn(array $entry): Article => $entry['article'],
-                $pool,
-            );
+        $pool = $this->limitPerFeed($scored);
+        if (count($pool) <= $limit) {
+            return $this->mostRecentFirst($pool);
         }
 
         $pool = $this->randomizer->shuffleArray($pool);
 
+        return $this->mostRecentFirst(array_slice($pool, 0, $limit));
+    }
+
+    /**
+     * La sélection du pool reste pilotée par le score, mais une fois les
+     * articles retenus la vue les présente du plus récent au plus ancien. La
+     * question que pose la page est « qu'est-ce que j'ai de neuf ? », et
+     * l'ordre de score mélangeait des articles de jours différents sans que
+     * l'ordre affiché soit lisible. Le classement par score reste déterminant
+     * pour le choix des articles, pas pour leur présentation.
+     *
+     * @param list<array{score: float, article: Article}> $entries
+     * @return list<Article>
+     */
+    private function mostRecentFirst(array $entries): array
+    {
+        usort($entries, static function (array $left, array $right): int {
+            $leftDate = $left['article']->publishedAt ?? $left['article']->discoveredAt;
+            $rightDate = $right['article']->publishedAt ?? $right['article']->discoveredAt;
+            $byDate = $rightDate <=> $leftDate;
+
+            return $byDate !== 0 ? $byDate : $left['article']->id <=> $right['article']->id;
+        });
+
         return array_map(
             static fn(array $entry): Article => $entry['article'],
-            array_slice($pool, 0, self::RECOMMENDATION_LIMIT),
+            $entries,
         );
+    }
+
+    /**
+     * Aucun flux ne peut occuper plus de MAX_PER_FEED places. La limite s'applique
+     * au pool et non aux seuls articles affichés : plafonner à la sortie
+     * laisserait passer des groupes d'un seul flux dès qu'ils remplissent le pool.
+     *
+     * @param list<array{score: float, article: Article}> $scored
+     * @return list<array{score: float, article: Article}>
+     */
+    private function limitPerFeed(array $scored): array
+    {
+        $counted = [];
+        $pool = [];
+        foreach ($scored as $entry) {
+            $feedId = $entry['article']->feedId;
+            $counted[$feedId] = ($counted[$feedId] ?? 0) + 1;
+            if ($counted[$feedId] > self::MAX_PER_FEED) {
+                continue;
+            }
+            $pool[] = $entry;
+            if (count($pool) >= self::RECOMMENDATION_POOL_LIMIT) {
+                break;
+            }
+        }
+
+        return $pool;
     }
 
     private function freshnessScore(Article $article): float

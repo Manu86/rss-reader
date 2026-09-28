@@ -346,7 +346,7 @@ function renderNavigation() {
     const navigationRoute = route.name === 'article'
         ? parseRoute(route.query.from || '#/')
         : route;
-    [dom.managementLink, dom.settingsLink, dom.headerSettingsLink].forEach((link) => {
+    [dom.managementLink, dom.settingsLink].forEach((link) => {
         link?.removeAttribute('aria-current');
     });
     if (route.name === 'manage') {
@@ -354,7 +354,6 @@ function renderNavigation() {
     }
     if (route.name === 'settings') {
         dom.settingsLink?.setAttribute('aria-current', 'page');
-        dom.headerSettingsLink?.setAttribute('aria-current', 'page');
     }
     const main = [
         ['Recommandé', buildRoute('recommendations'), 'recommendations', app.recommendationCount],
@@ -817,6 +816,8 @@ function bindEvents() {
         catch (error) { showToast(errorMessage(error), 'error'); }
     });
     dom.addCategory.addEventListener('click', () => openCategoryDialog({ onSave: async (value) => { await app.api.createCategory(value); await refreshCurrentView(); } }));
+    dom.addFeed.addEventListener('click', () => openAddFeed());
+    dom.headerAddFeed.addEventListener('click', () => openAddFeed());
     dom.offlineRetry.addEventListener('click', start);
     dom.navigationToggle.addEventListener('click', () => {
         openNavigation();
@@ -948,11 +949,12 @@ function collectDom() {
     dom.headerUsername = byId('header-username');
     dom.managementLink = byId('management-navigation-link');
     dom.settingsLink = byId('settings-navigation-link');
-    dom.headerSettingsLink = byId('header-settings-link');
+    dom.headerAddFeed = byId('header-add-feed-button');
     dom.logout = byId('logout-button');
     dom.sidebarLogout = byId('sidebar-logout-button');
     dom.refreshAll = byId('refresh-all-button');
     dom.addCategory = byId('add-category-button');
+    dom.addFeed = byId('add-feed-button');
     dom.offlineRetry = byId('offline-retry');
     dom.navigationToggle = byId('navigation-toggle');
     dom.navigationClose = byId('navigation-close');
