@@ -21,7 +21,8 @@ final readonly class UserSettingsRepository
     public function findOwned(int $userId): ?UserSettings
     {
         $statement = $this->pdo->prepare(
-            'SELECT articles_per_page, theme FROM user_settings WHERE user_id = :user_id'
+            'SELECT articles_per_page, theme, recommendation_email_frequency '
+            . 'FROM user_settings WHERE user_id = :user_id'
         );
         $statement->execute(['user_id' => $userId]);
         $row = $statement->fetch();
@@ -39,7 +40,12 @@ final readonly class UserSettingsRepository
             ? $theme
             : UserSettings::DEFAULT_THEME;
 
-        return new UserSettings($userId, $pageSize, $theme);
+        $frequency = (string) $row['recommendation_email_frequency'];
+        $frequency = in_array($frequency, UserSettings::ALLOWED_RECOMMENDATION_EMAIL_FREQUENCIES, true)
+            ? $frequency
+            : UserSettings::DEFAULT_RECOMMENDATION_EMAIL_FREQUENCY;
+
+        return new UserSettings($userId, $pageSize, $theme, $frequency);
     }
 
     public function updateArticlePreferences(

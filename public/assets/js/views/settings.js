@@ -71,6 +71,14 @@ function userName(user) {
     return '';
 }
 
+function userEmail(user) {
+    const value = dataValue(user);
+    if (value !== null && typeof value === 'object') {
+        return textValue(value.email, '');
+    }
+    return '';
+}
+
 function refreshSummary(result) {
     const results = Array.isArray(dataValue(result).results) ? dataValue(result).results : [];
     if (results.length === 0) {
@@ -265,6 +273,47 @@ function passwordSettingsForm(instance) {
     return { form, current, next, confirmation };
 }
 
+function profileSettingsForm(instance) {
+    const form = el('form', { className: 'settings-form', novalidate: true });
+    const emailId = `profile-email-${instance.instanceId}`;
+    const email = el('input', {
+        id: emailId,
+        name: 'email',
+        type: 'email',
+        maxLength: 254,
+        autocomplete: 'email',
+        value: userEmail(instance.user),
+    });
+    const frequencyId = `recommendation-email-frequency-${instance.instanceId}`;
+    const frequency = el('select', {
+        id: frequencyId,
+        name: 'recommendation_email_frequency',
+        required: true,
+    }, [
+        el('option', { value: 'never', text: 'Jamais' }),
+        el('option', { value: 'daily', text: 'Quotidienne' }),
+        el('option', { value: 'weekly', text: 'Hebdomadaire' }),
+        el('option', { value: 'monthly', text: 'Mensuelle' }),
+    ]);
+    frequency.value = instance.recommendationEmailFrequency;
+    form.appendChild(field('Adresse email', email, {
+        hint: 'Facultative. Elle n’est pas utilisée pour vous connecter.',
+    }));
+    form.appendChild(field('Fréquence des recommandations', frequency, {
+        hint: 'Envoi à partir de 8 h (Europe/Paris), le lundi ou le premier jour du mois selon la fréquence.',
+    }));
+    form.appendChild(statusNode());
+    form.appendChild(messageNode());
+    form.appendChild(el('div', { className: 'form-actions' }, [
+        button('Enregistrer l’adresse email', {
+            type: 'submit',
+            className: 'button button-primary',
+            icon: 'check',
+        }),
+    ]));
+    return { form, email, frequency };
+}
+
 function appearanceSettingsForm(instance) {
     const form = el('form', { className: 'settings-form', novalidate: true });
     const themeId = `theme-${instance.instanceId}`;
@@ -356,6 +405,7 @@ export class SettingsView {
         this.feeds = [];
         this.busySection = null;
         this.pending = new Set();
+        this.recommendationEmailFrequency = 'never';
         this.appliedTheme = typeof document !== 'undefined'
             && document.documentElement.dataset.theme === 'dark'
             ? 'dark'
@@ -378,6 +428,9 @@ export class SettingsView {
                 }
                 if (Object.prototype.hasOwnProperty.call(source, 'busySection')) {
                     this.busySection = source.busySection ?? null;
+                }
+                if (['never', 'daily', 'weekly', 'monthly'].includes(source.recommendation_email_frequency)) {
+                    this.recommendationEmailFrequency = source.recommendation_email_frequency;
                 }
             });
         }
@@ -407,11 +460,65 @@ export class SettingsView {
             ]));
         }
 
+        view.appendChild(this.renderProfileSection());
         view.appendChild(this.renderAppearanceSection());
         view.appendChild(this.renderFeedRefreshSection());
         view.appendChild(this.renderOpmlSection());
         view.appendChild(this.renderPasswordSection());
         setChildren(this.root, view);
+    }
+
+    renderProfileSection() {
+        const section = createSettingsSection(
+            this,
+            'Profil',
+            'Renseignez l’adresse email associée à votre compte.',
+        );
+        const controls = profileSettingsForm(this);
+        const callback = this.callbacks.onUpdateProfile;
+        const submit = controls.form.querySelector('button[type="submit"]');
+        if (typeof callback !== 'function') {
+            submit.disabled = true;
+        } else if (this.isBusy('profile')) {
+            setFormBusy(controls.form, true);
+        }
+        controls.form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const error = formError(controls.form);
+            clearMessage(error);
+            const email = controls.email.value.trim();
+            if (email !== '' && !controls.email.validity.valid) {
+                setMessage(error, 'Saisissez une adresse email valide.');
+                controls.email.focus();
+                return;
+            }
+            const frequency = controls.frequency.value;
+            if (email === '' && frequency !== 'never') {
+                setMessage(error, 'Renseignez une adresse email ou choisissez « Jamais ».');
+                controls.email.focus();
+                return;
+            }
+            await runSection(
+                this,
+                'profile',
+                controls.form,
+                () => callback({ email, recommendation_email_frequency: frequency }),
+                (result) => {
+                    this.user = dataValue(result);
+                    this.recommendationEmailFrequency = textValue(
+                        this.user.recommendation_email_frequency,
+                        'never',
+                    );
+                    controls.email.value = userEmail(this.user);
+                    controls.frequency.value = this.recommendationEmailFrequency;
+                },
+                email === ''
+                    ? 'Adresse email effacée. Les recommandations par email sont désactivées.'
+                    : 'Préférences d’envoi enregistrées.',
+            );
+        });
+        section.appendChild(controls.form);
+        return section;
     }
 
     renderAppearanceSection() {

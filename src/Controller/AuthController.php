@@ -117,4 +117,29 @@ final readonly class AuthController
             'Set-Cookie' => $this->rememberTokens->clearCookie()->toHeader(),
         ]);
     }
+
+    public function updateProfile(Request $request): Response
+    {
+        $user = $this->currentUser->require();
+        $data = $request->json();
+        $request->rejectUnknownFields($data, ['email', 'recommendation_email_frequency']);
+        if (!array_key_exists('email', $data) || !is_string($data['email'])) {
+            throw new ValidationException([
+                'email' => 'Une adresse email est requise.',
+            ]);
+        }
+        $frequency = $data['recommendation_email_frequency'] ?? null;
+        if (!is_string($frequency)) {
+            throw new ValidationException([
+                'recommendation_email_frequency' => 'Une fréquence d’envoi est requise.',
+            ]);
+        }
+
+        return Response::json([
+            'data' => [
+                ...$this->users->updateOwnProfile($user, $data['email'], $frequency)->publicData(),
+                'recommendation_email_frequency' => $frequency,
+            ],
+        ]);
+    }
 }

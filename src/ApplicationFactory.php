@@ -31,6 +31,7 @@ use App\Repository\CategoryRepository;
 use App\Repository\FeedRepository;
 use App\Repository\LoginAttemptRepository;
 use App\Repository\MediaReferenceRepository;
+use App\Repository\RecommendationEmailRepository;
 use App\Repository\RememberTokenRepository;
 use App\Repository\RemoteActionAttemptRepository;
 use App\Repository\UserRepository;
@@ -60,13 +61,21 @@ use App\Service\MediaCleanupService;
 use App\Service\OpmlExporter;
 use App\Service\OpmlImportService;
 use App\Service\OpmlParser;
+use App\Service\RecommendationDigestMailer;
+use App\Service\RecommendationDigestService;
 use App\Service\RecommendationService;
 use App\Service\RememberTokenService;
 use App\Service\RemoteMediaService;
+use App\Service\StoredRecommendationImageProvider;
+use App\Service\SymfonyRecommendationDigestMailer;
 use App\Service\UserService;
 use App\Service\UserSettingsService;
 use App\Storage\FileMediaStorage;
 use App\Validation\UrlNormalizer;
+use RuntimeException;
+use Symfony\Component\Mailer\Mailer;
+use Symfony\Component\Mailer\Transport;
+use Symfony\Component\Mime\Address;
 
 final class ApplicationFactory
 {
@@ -78,6 +87,7 @@ final class ApplicationFactory
         $users = new UserRepository($pdo);
         $feeds = new FeedRepository($pdo);
         $articles = new ArticleRepository($pdo);
+        $categories = new CategoryRepository($pdo);
         $urlResolver = new UrlResolver();
         $urlNormalizer = new UrlNormalizer();
         $httpClient = SafeHttpClientFactory::create($config);
@@ -117,9 +127,35 @@ final class ApplicationFactory
             new UserService($users, new PasswordPolicy(), $clock),
             new PasswordReader(),
             new AutomaticFeedRefreshService($feeds, $synchronization),
+            new RecommendationDigestService(
+                new RecommendationEmailRepository($pdo),
+                new RecommendationService($articles, $categories),
+                self::recommendationDigestMailer($config, $articles, $mediaStorage),
+                $clock,
+            ),
             $articleRetention,
             new FileProcessLock($config->cronLockPath),
             $articles,
+        );
+    }
+
+    private static function recommendationDigestMailer(
+        AppConfig $config,
+        ArticleRepository $articles,
+        FileMediaStorage $mediaStorage,
+    ): ?RecommendationDigestMailer {
+        if ($config->mailerDsn === null) {
+            return null;
+        }
+        if ($config->mailFrom === null || $config->appBaseUrl === null) {
+            throw new RuntimeException('La configuration du transport email est incomplète.');
+        }
+
+        return new SymfonyRecommendationDigestMailer(
+            new Mailer(Transport::fromDsn($config->mailerDsn)),
+            new Address($config->mailFrom, $config->mailFromName),
+            $config->appBaseUrl,
+            new StoredRecommendationImageProvider($articles, $mediaStorage),
         );
     }
 

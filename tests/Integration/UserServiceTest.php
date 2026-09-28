@@ -71,4 +71,29 @@ final class UserServiceTest extends TestCase
         self::assertTrue($this->service->setActive('alice', true));
         self::assertNotNull($this->repository->findActiveById($user->id));
     }
+
+    public function testUserCanUpdateOptionalEmail(): void
+    {
+        $user = $this->service->create('alice', 'correct horse battery staple');
+
+        $updated = $this->service->updateOwnProfile($user, ' alice@example.org ', 'daily');
+        self::assertSame('alice@example.org', $updated->email);
+        self::assertNull($this->service->updateOwnProfile($updated, '', 'never')->email);
+    }
+
+    public function testInvalidEmailIsRejected(): void
+    {
+        $user = $this->service->create('alice', 'correct horse battery staple');
+
+        $this->expectException(ValidationException::class);
+        $this->service->updateOwnProfile($user, 'adresse-invalide', 'daily');
+    }
+
+    public function testEmailFrequencyRequiresAnEmail(): void
+    {
+        $user = $this->service->create('alice', 'correct horse battery staple');
+
+        $this->expectException(ValidationException::class);
+        $this->service->updateOwnProfile($user, '', 'weekly');
+    }
 }

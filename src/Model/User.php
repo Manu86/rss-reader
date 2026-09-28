@@ -11,14 +11,16 @@ final readonly class User
         public string $username,
         public string $passwordHash,
         public bool $active,
+        public ?string $email = null,
     ) {}
 
-    /** @return array{id: int, username: string} */
+    /** @return array{id: int, username: string, email: ?string} */
     public function publicData(): array
     {
         return [
             'id' => $this->id,
             'username' => $this->username,
+            'email' => $this->email,
         ];
     }
 }

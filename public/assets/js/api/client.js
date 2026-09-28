@@ -284,6 +284,10 @@ export class ApiClient {
         return this.request('/settings', { method: 'PATCH', body: settings });
     }
 
+    updateProfile(profile) {
+        return this.request('/settings/profile', { method: 'PATCH', body: profile });
+    }
+
     changePassword(currentPassword, newPassword) {
         const body = currentPassword !== null && typeof currentPassword === 'object'
             ? currentPassword
@@ -528,4 +532,3 @@ export class ApiClient {
 export function createApiClient(options = {}) {
     return new ApiClient(options);
 }
-

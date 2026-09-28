@@ -278,6 +278,7 @@ test('les méthodes de convenience utilisent les routes API documentées', async
     await client.getCounts();
     await client.getSettings();
     await client.updateSettings({ articles_per_page: 50 });
+    await client.updateProfile({ email: 'alice@example.org', recommendation_email_frequency: 'daily' });
     await client.changePassword('ancien', 'nouveau-long');
     await client.importOpml(new TestFormData());
     const exported = await client.exportOpml();
@@ -301,6 +302,7 @@ test('les méthodes de convenience utilisent les routes API documentées', async
         '/api/counts',
         '/api/settings',
         '/api/settings',
+        '/api/settings/profile',
         '/api/settings/password',
         '/api/opml/import',
         '/api/opml/export',
@@ -395,7 +397,7 @@ test('les mutations de flux et de catégories utilisent les payloads documentés
     assert.strictEqual(calls[4].init.body, '{"name":"Nouvelles","category_id":null,"is_active":false}');
 });
 
-test('les paramètres, le mot de passe et OPML utilisent les contrats dédiés', async () => {
+test('le profil, les paramètres, le mot de passe et OPML utilisent les contrats dédiés', async () => {
     const calls = [];
     const client = new ApiClient({
         fetch: async (url, init) => {
@@ -408,6 +410,7 @@ test('les paramètres, le mot de passe et OPML utilisent les contrats dédiés',
 
     await client.getSettings();
     await client.updateSettings({ articles_per_page: 50 });
+    await client.updateProfile({ email: 'alice@example.org', recommendation_email_frequency: 'weekly' });
     await client.changePassword({
         current_password: 'ancien-mot-de-passe',
         new_password: 'nouveau-mot-de-passe',
@@ -418,6 +421,7 @@ test('les paramètres, le mot de passe et OPML utilisent les contrats dédiés',
     assert.deepStrictEqual(calls.map((call) => call.url), [
         '/api/settings',
         '/api/settings',
+        '/api/settings/profile',
         '/api/settings/password',
         '/api/opml/import',
         '/api/opml/export',
@@ -425,9 +429,13 @@ test('les paramètres, le mot de passe et OPML utilisent les contrats dédiés',
     assert.strictEqual(calls[1].init.body, '{"articles_per_page":50}');
     assert.strictEqual(
         calls[2].init.body,
+        '{"email":"alice@example.org","recommendation_email_frequency":"weekly"}',
+    );
+    assert.strictEqual(
+        calls[3].init.body,
         '{"current_password":"ancien-mot-de-passe","new_password":"nouveau-mot-de-passe"}',
     );
-    assert.ok(calls[3].init.body instanceof TestFormData);
-    assert.strictEqual(calls[4].init.headers.accept, 'application/xml');
+    assert.ok(calls[4].init.body instanceof TestFormData);
+    assert.strictEqual(calls[5].init.headers.accept, 'application/xml');
     assert.strictEqual(client.csrfToken, 'jeton-2');
 });

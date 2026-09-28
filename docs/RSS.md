@@ -185,6 +185,12 @@ Original article URL remains available.
 Choose an image candidate from standard feed/media/content sources when
 available.
 
+When an article has no image candidate in the feed, the synchronizer may fetch
+the article page and inspect only standard image metadata (`og:image` and
+`twitter:image`). It does not use that page to reconstruct the article text.
+Candidate page and image URLs pass through the same centralized safe HTTP
+client and validation pipeline as feed-provided media.
+
 Download through the centralized safe HTTP client.
 
 Validate:
@@ -253,10 +259,15 @@ Current implementation details:
     candidates;
 -   candidates are fetched only after the article/feed transaction has
     completed, so remote I/O never holds an SQLite write transaction;
+-   when the feed has no article image, standard Open Graph/Twitter image
+    metadata from the article page is used as a bounded fallback;
 -   JPEG, PNG, GIF, WebP and structurally valid ICO files are accepted after
     content inspection; SVG and MIME/content mismatches are rejected;
 -   media failure is non-fatal and missing media is retried on a later
-    synchronization when the candidate remains available.
+    synchronization when the candidate remains available;
+-   when the article has no feed image candidate, the article-page metadata
+    fallback is attempted once and its checked state is persisted; explicit
+    feed image candidates remain eligible for retry when download fails.
 
 ## Status
 

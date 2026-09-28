@@ -116,6 +116,9 @@ Cover:
 -   logout/session invalidation;
 -   session regeneration where testable;
 -   password change;
+-   optional email update, validation and user isolation;
+-   recommendation email schedule boundaries, no duplicate period delivery,
+    empty recommendations, transport failure and safe email rendering;
 -   generic authentication errors;
 -   CSRF valid/missing/invalid;
 -   cross-user resource access;
@@ -251,6 +254,8 @@ active embeds while retaining legitimate reading markup.
 -   SVG rejection;
 -   traversal-like filename;
 -   storage path cannot escape media root.
+-   recommendation thumbnails are ownership-scoped, resized to 88 × 88 and
+    bounded to 100 KB each.
 
 ## Frontend/PWA validation
 

@@ -11,6 +11,7 @@ use App\Repository\UserRepository;
 use App\Service\ArticleRetentionService;
 use App\Service\AutomaticFeedRefreshService;
 use App\Service\InstallationService;
+use App\Service\RecommendationDigestService;
 use App\Service\UserService;
 use Throwable;
 
@@ -23,6 +24,7 @@ final readonly class ConsoleApplication
         private UserService $userService,
         private PasswordReader $passwordReader,
         private AutomaticFeedRefreshService $automaticFeedRefresh,
+        private RecommendationDigestService $recommendationDigests,
         private ArticleRetentionService $articleRetention,
         private ProcessLock $maintenanceLock,
         private ArticleRepository $articles,
@@ -203,6 +205,7 @@ HELP
         try {
             $summary = $this->automaticFeedRefresh->run();
             $deletedArticles = $this->articleRetention->cleanup();
+            $digestSummary = $this->recommendationDigests->run();
         } finally {
             $this->maintenanceLock->release();
         }
@@ -217,8 +220,22 @@ HELP
             $deletedArticles,
             PHP_EOL,
         ));
+        if ($digestSummary['configured']) {
+            fwrite(STDOUT, sprintf(
+                'Recommandations par email : %d destinataire(s), %d dû(s), %d envoyé(s), '
+                . '%d sans recommandation, %d échec(s).%s',
+                $digestSummary['total'],
+                $digestSummary['due'],
+                $digestSummary['sent'],
+                $digestSummary['empty'],
+                $digestSummary['failed'],
+                PHP_EOL,
+            ));
+        } else {
+            fwrite(STDOUT, 'Recommandations par email : transport non configuré.' . PHP_EOL);
+        }
 
-        return $summary['failed'] === 0 ? 0 : 1;
+        return $summary['failed'] === 0 && $digestSummary['failed'] === 0 ? 0 : 1;
     }
 
     private function cleanupArticles(): int

@@ -15,6 +15,15 @@ if (strcasecmp(trim($environment), 'production') === 0) {
     $sessionSecure = true;
 }
 
+$optionalEnvironment = static function (string $name): ?string {
+    $value = getenv($name);
+    if (!is_string($value) || trim($value) === '') {
+        return null;
+    }
+
+    return trim($value);
+};
+
 return [
     'environment' => $environment,
     'database_path' => getenv('APP_DATABASE_PATH') ?: dirname(__DIR__) . '/var/database/rss-reader.sqlite',
@@ -35,4 +44,8 @@ return [
     'media_max_width' => (int) (getenv('APP_MEDIA_MAX_WIDTH') ?: 4096),
     'media_max_height' => (int) (getenv('APP_MEDIA_MAX_HEIGHT') ?: 4096),
     'media_max_pixels' => (int) (getenv('APP_MEDIA_MAX_PIXELS') ?: 16777216),
+    'app_base_url' => $optionalEnvironment('APP_BASE_URL'),
+    'mailer_dsn' => $optionalEnvironment('APP_MAILER_DSN'),
+    'mail_from' => $optionalEnvironment('APP_MAIL_FROM'),
+    'mail_from_name' => getenv('APP_MAIL_FROM_NAME') ?: 'RSS Reader',
 ];

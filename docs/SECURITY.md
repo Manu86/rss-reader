@@ -106,6 +106,27 @@ Never accept the authenticated user ID from request input.
 Every operation on categories, feeds, articles, settings, search, OPML
 and media must be scoped to the session user.
 
+Profile email updates never accept a user identifier: they apply only to the
+authenticated account, require CSRF protection and validate the address on the
+server. Email addresses are not authentication identifiers in V1. Enabling a
+digest requires a non-empty address, and the address plus frequency are updated
+atomically.
+
+Recommendation emails contain only the authenticated user's own recommended
+article titles, source names, dates, categories and application links. All
+feed-provided values are escaped. Locally stored thumbnails may be embedded as
+inline MIME parts after bounded resizing, with a 100 KB per-image limit and an
+approximately 2 MB aggregate MIME limit; messages contain no remote image
+references, tracking content or active HTML. Email transport credentials are environment-only
+secrets and must never appear in API responses, logs or the database. Delivery
+errors log only the internal user identifier.
+
+Media files are not served directly by the web server. The PHP-FPM and CLI
+runtimes need shared filesystem access to the media store, while API ownership
+checks remain the authorization boundary. On deployments using POSIX ACLs,
+grant both runtime accounts access without making the media tree
+world-readable.
+
 Prefer user-scoped repository queries such as:
 
 ``` sql
@@ -177,6 +198,9 @@ Requirements:
 -   enforce response size limits.
 
 The same rules apply to feed discovery, feeds, images and favicons.
+Article-page metadata fetched as a fallback for a missing feed image follows
+these rules as well; only a bounded HTML response is parsed and all discovered
+image URLs are validated again before download.
 
 Do not create alternate fetch paths that bypass these checks.
 

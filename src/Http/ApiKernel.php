@@ -105,6 +105,7 @@ final readonly class ApiKernel
             'POST /api/auth/login' => $this->auth->login($request),
             'POST /api/auth/logout' => $this->auth->logout($request),
             'GET /api/auth/me' => $this->auth->me(),
+            'PATCH /api/settings/profile' => $this->auth->updateProfile($request),
             'POST /api/settings/password' => $this->auth->changePassword($request),
             'GET /api/settings' => $this->settings->show(),
             'PATCH /api/settings' => $this->settings->update($request),

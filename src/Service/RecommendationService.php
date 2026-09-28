@@ -21,7 +21,7 @@ use Random\Randomizer;
  * only (no AI, no external service). A small bounded jitter breaks score
  * ties so the same articles do not stay pinned at the top of the view.
  */
-final readonly class RecommendationService
+final readonly class RecommendationService implements RecommendationProvider
 {
     private const FAVORITE_SIGNAL_LIMIT = 20;
     private const CANDIDATE_LIMIT = 60;

@@ -295,14 +295,22 @@ uncategorized.
 
 Settings UI contains:
 
+-   optional account email editing and recommendation email frequency;
 -   password change;
 -   articles-per-page selection;
 -   OPML import;
 -   OPML export.
 
-Section order is stable: appearance, feed refresh, OPML, then password
-change last. The password section is the destructive/rare action and
+Section order is stable: profile, appearance, feed refresh, OPML, then
+password change last. The password section is the destructive/rare action and
 stays at the bottom of the page.
+
+The profile section exposes a labelled `type="email"` control, prefilled with
+the current user's address when present, and a labelled frequency select with
+`Jamais`, `Quotidienne`, `Hebdomadaire` and `Mensuelle`. Submitting an empty
+address is possible only with `Jamais` and clears it. The interface explains
+that the address is optional, is not used for login, and that delivery occurs
+from 08:00 Europe/Paris on the relevant daily, Monday or first-of-month period.
 
 No general preference framework is required.
 

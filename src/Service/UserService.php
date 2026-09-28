@@ -8,6 +8,7 @@ use App\Clock\Clock;
 use App\Exception\AuthenticationException;
 use App\Exception\ValidationException;
 use App\Model\User;
+use App\Model\UserSettings;
 use App\Repository\UserRepository;
 use App\Security\PasswordPolicy;
 use PDOException;
@@ -55,6 +56,36 @@ final readonly class UserService
             password_hash($newPassword, PASSWORD_DEFAULT),
             $this->now(),
         );
+    }
+
+    public function updateOwnProfile(User $user, string $email, string $frequency): User
+    {
+        $email = trim($email);
+        $normalized = $email === '' ? null : $email;
+        if ($normalized !== null
+            && (strlen($normalized) > 254 || filter_var($normalized, FILTER_VALIDATE_EMAIL) === false)) {
+            throw new ValidationException([
+                'email' => 'Saisissez une adresse email valide de 254 caractères maximum.',
+            ]);
+        }
+        if (!in_array($frequency, UserSettings::ALLOWED_RECOMMENDATION_EMAIL_FREQUENCIES, true)) {
+            throw new ValidationException([
+                'recommendation_email_frequency' => 'La fréquence doit être never, daily, weekly ou monthly.',
+            ]);
+        }
+        if ($normalized === null && $frequency !== UserSettings::DEFAULT_RECOMMENDATION_EMAIL_FREQUENCY) {
+            throw new ValidationException([
+                'email' => 'Une adresse email est requise pour activer les recommandations par email.',
+            ]);
+        }
+
+        $this->users->updateProfile($user->id, $normalized, $frequency, $this->now());
+        $updated = $this->users->findActiveById($user->id);
+        if ($updated === null) {
+            throw new \RuntimeException('Le compte utilisateur est introuvable.');
+        }
+
+        return $updated;
     }
 
     public function resetPassword(string $username, string $password): bool

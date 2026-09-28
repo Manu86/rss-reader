@@ -50,6 +50,8 @@ and article records.
 
 V1 provides:
 
+-   an optional account email address and a recommendation email frequency,
+    editable by the authenticated user;
 -   password change;
 -   a fixed 25-article load size for article lists;
 -   interface theme selection (light or dark);
@@ -58,6 +60,26 @@ V1 provides:
 
 Article lists always load 25 articles before the infinite scroll requests the
 next batch.
+
+The email address is profile information only. It is not a login identifier,
+does not need to be unique and can be cleared. It is used only for the optional
+local recommendation digest and is never used for password recovery.
+
+Recommendation emails are opt-in and disabled by default. The available
+frequencies are daily, weekly and monthly, plus `never` to disable delivery.
+Delivery starts at 08:00 Europe/Paris; weekly periods start on Monday and
+monthly periods on the first day of the month. If the hourly job did not run at
+the exact boundary, the first later run in the same period sends the digest.
+No message is sent when there are no recommendations. A successful delivery is
+recorded so the same user receives at most one digest per selected period; a
+failed or empty delivery remains eligible for a later hourly run.
+Each recommended article uses the same information hierarchy as the web list:
+source, title, publication date and category. The email uses self-contained
+styles suitable for mail clients, embeds locally stored article thumbnails and
+links each card back to the application. Email thumbnails are center-cropped to
+88 × 88 pixels, encoded as JPEG at no more than 100 KB each, and collectively
+limited to about 2 MB after MIME encoding. Articles without an available image
+show the RSS pictogram used by the web list.
 
 ## Categories
 

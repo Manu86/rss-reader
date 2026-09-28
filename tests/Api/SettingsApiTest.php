@@ -40,6 +40,93 @@ final class SettingsApiTest extends TestCase
             ['content-type' => 'application/json', 'x-csrf-token' => $csrf],
             '{"articles_per_page":50}',
         ))->status);
+        self::assertSame(401, $kernel->handle(new Request(
+            'PATCH',
+            '/api/settings/profile',
+            ['content-type' => 'application/json', 'x-csrf-token' => $csrf],
+            '{"email":"alice@example.org","recommendation_email_frequency":"daily"}',
+        ))->status);
+    }
+
+    public function testUserCanSetAndClearOwnEmail(): void
+    {
+        [$kernel, $csrf, $userId] = $this->authenticatedKernel(
+            'alice',
+            'correct horse battery staple',
+        );
+
+        $updated = $kernel->handle(new Request(
+            'PATCH',
+            '/api/settings/profile',
+            ['content-type' => 'application/json', 'x-csrf-token' => $csrf],
+            '{"email":"  alice@example.org  ","recommendation_email_frequency":"weekly"}',
+        ));
+        self::assertSame(200, $updated->status);
+        self::assertSame('alice@example.org', $this->decode($updated)['data']['email']);
+        self::assertSame('weekly', $this->decode($updated)['data']['recommendation_email_frequency']);
+        self::assertSame('alice@example.org', $this->storedEmail($userId));
+        self::assertSame('weekly', $this->storedRecommendationEmailFrequency($userId));
+        self::assertSame('alice@example.org', $this->decode(
+            $kernel->handle(new Request('GET', '/api/auth/me'))
+        )['data']['email']);
+
+        $cleared = $kernel->handle(new Request(
+            'PATCH',
+            '/api/settings/profile',
+            ['content-type' => 'application/json', 'x-csrf-token' => $csrf],
+            '{"email":"","recommendation_email_frequency":"never"}',
+        ));
+        self::assertSame(200, $cleared->status);
+        self::assertNull($this->decode($cleared)['data']['email']);
+        self::assertNull($this->storedEmail($userId));
+        self::assertSame('never', $this->storedRecommendationEmailFrequency($userId));
+    }
+
+    public function testEmailUpdateIsValidatedCsrfProtectedAndUserScoped(): void
+    {
+        [$aliceKernel, $aliceCsrf, $aliceId] = $this->authenticatedKernel(
+            'alice',
+            'correct horse battery staple',
+        );
+        [$bobKernel, , $bobId] = $this->authenticatedKernel('bob', 'another correct horse battery');
+
+        self::assertSame(403, $aliceKernel->handle(new Request(
+            'PATCH',
+            '/api/settings/profile',
+            ['content-type' => 'application/json'],
+            '{"email":"alice@example.org","recommendation_email_frequency":"daily"}',
+        ))->status);
+
+        foreach ([
+            '{}',
+            '{"email":null,"recommendation_email_frequency":"never"}',
+            '{"email":"invalide","recommendation_email_frequency":"daily"}',
+            '{"email":"alice@example.org"}',
+            '{"email":"alice@example.org","recommendation_email_frequency":"hourly"}',
+            '{"email":"","recommendation_email_frequency":"daily"}',
+            '{"email":"a@b","recommendation_email_frequency":"never","extra":true}',
+        ] as $payload) {
+            self::assertSame(422, $aliceKernel->handle(new Request(
+                'PATCH',
+                '/api/settings/profile',
+                ['content-type' => 'application/json', 'x-csrf-token' => $aliceCsrf],
+                $payload,
+            ))->status);
+        }
+
+        self::assertSame(200, $aliceKernel->handle(new Request(
+            'PATCH',
+            '/api/settings/profile',
+            ['content-type' => 'application/json', 'x-csrf-token' => $aliceCsrf],
+            '{"email":"alice@example.org","recommendation_email_frequency":"monthly"}',
+        ))->status);
+        self::assertSame('alice@example.org', $this->storedEmail($aliceId));
+        self::assertSame('monthly', $this->storedRecommendationEmailFrequency($aliceId));
+        self::assertNull($this->storedEmail($bobId));
+        self::assertSame('never', $this->storedRecommendationEmailFrequency($bobId));
+        self::assertNull($this->decode(
+            $bobKernel->handle(new Request('GET', '/api/auth/me'))
+        )['data']['email']);
     }
 
     public function testUserCanReadAndUpdateArticlesPerPage(): void
@@ -48,7 +135,11 @@ final class SettingsApiTest extends TestCase
 
         $initial = $kernel->handle(new Request('GET', '/api/settings'));
         self::assertSame(200, $initial->status);
-        self::assertSame(['articles_per_page' => 25, 'theme' => 'light'], $this->decode($initial)['data']);
+        self::assertSame([
+            'articles_per_page' => 25,
+            'theme' => 'light',
+            'recommendation_email_frequency' => 'never',
+        ], $this->decode($initial)['data']);
 
         foreach ([10, 25, 50, 100] as $pageSize) {
             $updated = $kernel->handle(new Request(
@@ -140,7 +231,11 @@ final class SettingsApiTest extends TestCase
 
         $initial = $kernel->handle(new Request('GET', '/api/settings'));
         self::assertSame(200, $initial->status);
-        self::assertSame(['articles_per_page' => 25, 'theme' => 'light'], $this->decode($initial)['data']);
+        self::assertSame([
+            'articles_per_page' => 25,
+            'theme' => 'light',
+            'recommendation_email_frequency' => 'never',
+        ], $this->decode($initial)['data']);
 
         $updated = $kernel->handle(new Request(
             'PATCH',
@@ -149,7 +244,11 @@ final class SettingsApiTest extends TestCase
             '{"theme":"dark"}',
         ));
         self::assertSame(200, $updated->status);
-        self::assertSame(['articles_per_page' => 25, 'theme' => 'dark'], $this->decode($updated)['data']);
+        self::assertSame([
+            'articles_per_page' => 25,
+            'theme' => 'dark',
+            'recommendation_email_frequency' => 'never',
+        ], $this->decode($updated)['data']);
 
         $combined = $kernel->handle(new Request(
             'PATCH',
@@ -158,7 +257,11 @@ final class SettingsApiTest extends TestCase
             '{"theme":"light","articles_per_page":50}',
         ));
         self::assertSame(200, $combined->status);
-        self::assertSame(['articles_per_page' => 50, 'theme' => 'light'], $this->decode($combined)['data']);
+        self::assertSame([
+            'articles_per_page' => 50,
+            'theme' => 'light',
+            'recommendation_email_frequency' => 'never',
+        ], $this->decode($combined)['data']);
 
         self::assertSame('light', $this->storedTheme($this->decode(
             $kernel->handle(new Request('GET', '/api/auth/me'))
@@ -230,6 +333,25 @@ final class SettingsApiTest extends TestCase
         $value = $statement->fetchColumn();
 
         return $value === false || $value === null ? null : (string) $value;
+    }
+
+    private function storedEmail(int $userId): ?string
+    {
+        $statement = $this->pdo->prepare('SELECT email FROM users WHERE id = :user_id');
+        $statement->execute(['user_id' => $userId]);
+        $value = $statement->fetchColumn();
+
+        return $value === false || $value === null ? null : (string) $value;
+    }
+
+    private function storedRecommendationEmailFrequency(int $userId): string
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT recommendation_email_frequency FROM user_settings WHERE user_id = :user_id'
+        );
+        $statement->execute(['user_id' => $userId]);
+
+        return (string) $statement->fetchColumn();
     }
 
     /** @return array<string, mixed> */

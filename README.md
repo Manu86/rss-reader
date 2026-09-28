@@ -31,9 +31,24 @@ PWA et une API JSON.
 
 PHP 8.2 ou plus récent avec les extensions suivantes : PDO SQLite, SQLite
 (avec FTS5, activé par défaut sur les distributions courantes), ctype, curl,
-dom, json, mbstring, session. Composer est requis pour l'installation et la
+dom, GD, json, mbstring, session. Les comptes PHP-FPM et cron doivent disposer
+d’un accès ACL partagé sur `var/media` et ses sous-dossiers. Composer
+est requis pour l'installation et la
 qualité. La production nécessite HTTPS et une racine web configurée sur
 `public/`.
+
+Quand PHP-FPM et le cron utilisent des comptes distincts, accordez-leur un ACL
+partagé sur les médias existants et futurs avec le script d’administration :
+
+```bash
+bin/fix-media-acl
+```
+
+Le compte courant est utilisé par défaut pour le cron et `www-data` pour
+PHP-FPM. Pour employer d’autres comptes, passez-les dans cet ordre :
+`bin/fix-media-acl CRON_USER PHP_FPM_USER`. Le script utilise
+`APP_MEDIA_PATH` quand cette variable est définie et demande les droits
+`sudo` nécessaires.
 
 ## Installation
 
@@ -55,6 +70,26 @@ planifiez la synchronisation :
 # toutes les heures, selon votre crontab
 php bin/console feeds:refresh
 ```
+
+Pour activer les recommandations par email, configurez également
+`APP_MAILER_DSN`, `APP_MAIL_FROM`, `APP_BASE_URL` et, facultativement,
+`APP_MAIL_FROM_NAME`. Exemple :
+
+```bash
+APP_MAILER_DSN='smtp://user:password@smtp.example.org:587'
+APP_MAIL_FROM='rss@example.org'
+APP_MAIL_FROM_NAME='RSS Reader'
+APP_BASE_URL='https://rss.example.org'
+```
+
+Avec un relais local compatible `sendmail`, par exemple `msmtp` :
+
+```bash
+APP_MAILER_DSN='sendmail://default?command=/usr/sbin/sendmail+-t+-i'
+```
+
+Les identifiants inclus dans le DSN doivent être encodés comme une URL et ne
+doivent jamais être versionnés.
 
 Le secret applicatif est généré dans `var/app.secret` à l'installation ; la
 variable d'environnement `APP_SECRET` le remplace le cas échéant. La liste

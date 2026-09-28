@@ -134,6 +134,38 @@ final class MediaApiTest extends TestCase
         self::assertCount(1, $this->application->mediaStorage->media);
     }
 
+    public function testArticleMetadataProvidesImageWhenFeedHasNone(): void
+    {
+        $feed = '<?xml version="1.0"?><rss version="2.0"><channel><title>Metadata</title>'
+            . '<item><guid>metadata-1</guid><title>Metadata image</title>'
+            . '<link>https://site.test/articles/metadata</link></item></channel></rss>';
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feed),
+            new TransportResponse(
+                200,
+                ['content-type' => 'text/html'],
+                '<meta property="og:image" content="/images/metadata.png">'
+            ),
+            new TransportResponse(200, ['content-type' => 'image/png'], $this->png()),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+
+        $response = $kernel->handle(new Request(
+            'POST',
+            '/api/feeds',
+            ['content-type' => 'application/json', 'x-csrf-token' => $csrf],
+            '{"feed_url":"https://feeds.test/metadata.xml","category_id":null}',
+        ));
+
+        self::assertSame(201, $response->status);
+        $statement = $this->pdo->query('SELECT id, image_path FROM articles');
+        self::assertNotFalse($statement);
+        $article = $statement->fetch();
+        self::assertIsArray($article);
+        self::assertIsString($article['image_path']);
+        self::assertCount(1, $this->application->mediaStorage->media);
+    }
+
     /** @return array{ApiKernel, string} */
     private function authenticatedKernel(
         string $username,

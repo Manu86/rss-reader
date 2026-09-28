@@ -155,8 +155,15 @@ final readonly class FeedSynchronizationService implements FeedRefresher
         }
 
         foreach ($inserted->mediaCandidates as $candidate) {
+            if ($candidate['metadata_fallback']) {
+                $this->articles->markImageMetadataChecked($candidate['id'], $feed->userId, $now);
+            }
             try {
-                $key = $this->media->download($feed->userId, $candidate['image_url']);
+                $key = $this->media->downloadArticleImage(
+                    $feed->userId,
+                    $candidate['image_url'],
+                    $candidate['article_url'],
+                );
                 if (!$this->articles->setImagePath($candidate['id'], $feed->userId, $key, $now)) {
                     $this->media->discard($feed->userId, $key);
                 }

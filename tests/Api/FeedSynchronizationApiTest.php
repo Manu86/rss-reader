@@ -42,10 +42,13 @@ final class FeedSynchronizationApiTest extends TestCase
                 'etag' => '"v1"',
                 'last-modified' => 'Wed, 23 Sep 2026 12:00:00 GMT',
             ], $this->fixture('sync-rss.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
             new TransportResponse(200, [
                 'content-type' => 'application/rss+xml',
                 'etag' => '"v2"',
             ], $this->fixture('sync-rss-updated.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
             new TransportResponse(304, [], ''),
         ]);
         [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
@@ -86,10 +89,11 @@ final class FeedSynchronizationApiTest extends TestCase
         self::assertSame(1, $first['is_favorite']);
         self::assertSame('Premier article modifié', $first['title']);
         self::assertSame('2026-09-24T12:00:00Z', $first['discovered_at']);
-        self::assertSame('"v1"', $transport->requests[1]->headers['if-none-match']);
+        self::assertNotNull($first['image_metadata_checked_at']);
+        self::assertSame('"v1"', $transport->requests[3]->headers['if-none-match']);
         self::assertSame(
             'Wed, 23 Sep 2026 12:00:00 GMT',
-            $transport->requests[1]->headers['if-modified-since'],
+            $transport->requests[3]->headers['if-modified-since'],
         );
 
         $notModified = $kernel->handle(new Request(
@@ -99,7 +103,42 @@ final class FeedSynchronizationApiTest extends TestCase
         ));
         self::assertSame(200, $notModified->status);
         self::assertTrue($this->decode($notModified)['data']['not_modified']);
-        self::assertSame('"v2"', $transport->requests[2]->headers['if-none-match']);
+        self::assertSame('"v2"', $transport->requests[5]->headers['if-none-match']);
+    }
+
+    public function testExplicitFeedImageRemainsEligibleForRetryAfterDownloadFailure(): void
+    {
+        $feed = <<<'XML'
+<?xml version="1.0"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel>
+  <title>Flux image</title><link>https://site.test/</link>
+  <item><guid>image-1</guid><title>Article image</title><link>https://site.test/articles/image-1</link>
+    <media:content url="https://site.test/image.png" medium="image" type="image/png"/>
+  </item>
+</channel></rss>
+XML;
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feed),
+            new TransportResponse(503, [], ''),
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feed),
+            new TransportResponse(503, [], ''),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+        $created = $this->createFeed($kernel, $csrf, 'https://feeds.test/images.xml', null);
+        self::assertSame(201, $created->status);
+        $feedId = $this->decode($created)['data']['id'];
+        self::assertIsInt($feedId);
+
+        $refreshed = $kernel->handle(new Request(
+            'POST',
+            '/api/feeds/' . $feedId . '/refresh',
+            ['x-csrf-token' => $csrf],
+        ));
+        self::assertSame(200, $refreshed->status);
+        self::assertCount(4, $transport->requests);
+        self::assertSame('https://site.test/image.png', $transport->requests[1]->url);
+        self::assertSame('https://site.test/image.png', $transport->requests[3]->url);
+        self::assertNull($this->articles($feedId)[0]['image_metadata_checked_at']);
     }
 
     public function testInvalidInitialFeedCreatesNothing(): void
@@ -196,9 +235,13 @@ final class FeedSynchronizationApiTest extends TestCase
     {
         $transport = new FakeHttpTransport([
             new TransportResponse(200, ['content-type' => 'application/rss+xml'], $this->fixture('sync-rss.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
             new TransportResponse(200, ['content-type' => 'application/atom+xml'], $this->fixture('sync-atom.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
             new TransportResponse(500, [], ''),
             new TransportResponse(200, ['content-type' => 'application/atom+xml'], $this->fixture('sync-atom.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
         ]);
         [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
         self::assertSame(201, $this->createFeed($kernel, $csrf, 'https://feeds.test/rss.xml', 'A')->status);

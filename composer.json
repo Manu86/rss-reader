@@ -8,12 +8,14 @@
         "ext-ctype": "*",
         "ext-curl": "*",
         "ext-dom": "*",
+        "ext-gd": "*",
         "ext-json": "*",
         "ext-mbstring": "*",
         "ext-pdo": "*",
         "ext-pdo_sqlite": "*",
         "ext-session": "*",
-        "league/commonmark": "^2.9.1"
+        "league/commonmark": "^2.9.1",
+        "symfony/mailer": "^7.4"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.95",

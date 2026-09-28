@@ -27,6 +27,10 @@ final readonly class AppConfig
         public int $mediaMaxWidth,
         public int $mediaMaxHeight,
         public int $mediaMaxPixels,
+        public ?string $appBaseUrl,
+        public ?string $mailerDsn,
+        public ?string $mailFrom,
+        public string $mailFromName,
     ) {
         if ($this->sessionLifetime < 300) {
             throw new RuntimeException('La durée de session doit être d’au moins 300 secondes.');
@@ -46,6 +50,14 @@ final readonly class AppConfig
         if ($this->mediaMaxBytes < 1024 || $this->mediaMaxBytes > $this->httpMaxResponseBytes
             || $this->mediaMaxWidth < 1 || $this->mediaMaxHeight < 1 || $this->mediaMaxPixels < 1) {
             throw new RuntimeException('Les limites de médias configurées sont invalides.');
+        }
+        if ($this->mailerDsn !== null) {
+            if ($this->mailFrom === null || filter_var($this->mailFrom, FILTER_VALIDATE_EMAIL) === false) {
+                throw new RuntimeException('APP_MAIL_FROM doit être une adresse email valide.');
+            }
+            if ($this->appBaseUrl === null || !$this->isSafeBaseUrl($this->appBaseUrl)) {
+                throw new RuntimeException('APP_BASE_URL doit être une URL HTTP(S) absolue sans identifiants.');
+            }
         }
     }
 
@@ -76,6 +88,10 @@ final readonly class AppConfig
             self::intValue($raw, 'media_max_width'),
             self::intValue($raw, 'media_max_height'),
             self::intValue($raw, 'media_max_pixels'),
+            self::nullableStringValue($raw, 'app_base_url'),
+            self::nullableStringValue($raw, 'mailer_dsn'),
+            self::nullableStringValue($raw, 'mail_from'),
+            self::stringValue($raw, 'mail_from_name'),
         );
     }
 
@@ -125,5 +141,35 @@ final readonly class AppConfig
         }
 
         return $value;
+    }
+
+    /** @param array<mixed> $values */
+    private static function nullableStringValue(array $values, string $key): ?string
+    {
+        $value = $values[$key] ?? null;
+        if ($value === null) {
+            return null;
+        }
+        if (!is_string($value) || trim($value) === '') {
+            throw new RuntimeException(sprintf('Configuration invalide : %s.', $key));
+        }
+
+        return trim($value);
+    }
+
+    private function isSafeBaseUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts)
+            || !isset($parts['scheme'], $parts['host'])
+            || !in_array(strtolower((string) $parts['scheme']), ['http', 'https'], true)
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['query'])
+            || isset($parts['fragment'])) {
+            return false;
+        }
+
+        return true;
     }
 }

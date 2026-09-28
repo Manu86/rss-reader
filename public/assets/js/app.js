@@ -1,8 +1,8 @@
-import { ApiError, NetworkError, createApiClient } from './api/client.js?v=2';
+import { ApiError, NetworkError, createApiClient } from './api/client.js?v=3';
 import { closeDialog } from './components/dialog.js';
 import { showToast } from './components/feedback.js';
 import { ManagementView } from './views/management.js?v=3';
-import { SettingsView } from './views/settings.js?v=3';
+import { SettingsView } from './views/settings.js?v=6';
 import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js';
 import { createLoginView } from './views/login.js';
 import { ArticlesView } from './views/articles.js?v=27';
@@ -712,8 +712,14 @@ function openManagement() {
 async function openSettings() {
     setVisible(dom.reading, false);
     setVisible(dom.utility, true);
+    const settings = dataOf(await app.api.getSettings());
     app.settingsView = new SettingsView(dom.utilityContent, {
         user: app.user,
+        onUpdateProfile: async (profile) => {
+            const response = await app.api.updateProfile(profile);
+            app.user = dataOf(response);
+            return response;
+        },
         onChangePassword: (value) => app.api.changePassword(value),
         onImportOpml: async (file) => { const result = await app.api.importOpml(file); await loadShell(); return result; },
         onRefreshFeeds: async () => {
@@ -728,7 +734,7 @@ async function openSettings() {
             return response;
         },
     });
-    app.settingsView.render({ user: app.user, feeds: app.feeds });
+    app.settingsView.render({ user: app.user, feeds: app.feeds, ...settings });
 }
 
 async function navigate() {

@@ -31,6 +31,9 @@ final class MigrationTest extends TestCase
                 '003_user_settings_theme',
                 '004_article_tags',
                 '005_user_remember_tokens',
+                '006_users_email',
+                '007_recommendation_email_delivery',
+                '008_article_image_metadata_checked',
             ],
             $this->migrator->migrate(),
         );
@@ -57,6 +60,21 @@ final class MigrationTest extends TestCase
         } catch (PDOException $error) {
             throw $error;
         }
+    }
+
+    public function testRecommendationEmailFrequencyRejectsUnknownValues(): void
+    {
+        $this->migrator->migrate();
+        $this->insertUsers();
+        $this->pdo->exec(
+            "INSERT INTO user_settings (user_id, articles_per_page, theme, created_at, updated_at) "
+            . "VALUES (1, 25, 'light', '2026-09-24T12:00:00Z', '2026-09-24T12:00:00Z')"
+        );
+
+        $this->expectException(PDOException::class);
+        $this->pdo->exec(
+            "UPDATE user_settings SET recommendation_email_frequency = 'hourly' WHERE user_id = 1"
+        );
     }
 
     public function testFeedCannotUseAnotherUsersCategory(): void

@@ -17,6 +17,7 @@ final class FileMediaStorageTest extends TestCase
         try {
             $key = $storage->store(12, 'image-content', 'png');
             self::assertMatchesRegularExpression('#\Au12/[a-f0-9]{2}/[a-f0-9]{32}\.png\z#', $key);
+            self::assertSame(0640, fileperms($root . '/' . $key) & 0777);
             self::assertSame('image-content', $storage->read(12, $key)?->content);
             self::assertNull($storage->read(13, $key));
             self::assertNull($storage->read(12, 'u12/aa/../../secret.png'));

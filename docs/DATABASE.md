@@ -18,6 +18,7 @@ CREATE TABLE users (
     id INTEGER PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    email TEXT NULL,
     is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -26,6 +27,9 @@ CREATE TABLE users (
 
 Passwords use PHP's password API.
 
+`email` is optional profile information, limited to 254 characters and
+validated by the application. It is not unique and is not used for login.
+
 ## `user_settings`
 
 ``` sql
@@ -33,6 +37,8 @@ CREATE TABLE user_settings (
     user_id INTEGER PRIMARY KEY,
     articles_per_page INTEGER NOT NULL DEFAULT 25,
     theme TEXT NOT NULL DEFAULT 'light',
+    recommendation_email_frequency TEXT NOT NULL DEFAULT 'never',
+    recommendation_email_last_sent_at TEXT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -42,6 +48,11 @@ CREATE TABLE user_settings (
 The `articles_per_page` column is retained for API compatibility and defaults to
 25, but the frontend always loads fixed batches of 25 articles. Allowed explicit
 API batch sizes and themes are controlled by the application.
+
+`recommendation_email_frequency` is one of `never`, `daily`, `weekly` or
+`monthly`. `recommendation_email_last_sent_at` stores the UTC time of the last
+successful digest only; failures and empty recommendation sets do not advance
+it.
 
 ## `categories`
 
@@ -121,6 +132,7 @@ summary NULL
 content NULL
 tags NULL
 image_path NULL
+image_metadata_checked_at NULL
 is_read
 is_favorite
 deduplication_hash
@@ -139,6 +151,9 @@ Rules:
 -   `(feed_id, deduplication_hash)` is unique;
 -   `discovered_at` is set on first import and remains stable;
 -   synchronization must not reset `is_read` or `is_favorite`;
+-   `image_metadata_checked_at` records when the article-page image metadata
+    fallback was attempted; it is set only for articles without a feed image
+    candidate and prevents repeating that fallback on every synchronization;
 -   `tags` stores the feed-provided article tags as a JSON array of
     non-empty strings (duplicates removed, at most 10 tags of at most
     100 characters each); the value is `NULL` when the item has no tag.
@@ -237,6 +252,10 @@ Store migrations under `migrations/`, for example:
 002_articles_fts.sql
 003_user_settings_theme.sql
 004_article_tags.sql
+005_user_remember_tokens.sql
+006_users_email.sql
+007_recommendation_email_delivery.sql
+008_article_image_metadata_checked.sql
 ```
 
 Track applied versions in a migration table.

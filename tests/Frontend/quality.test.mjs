@@ -157,6 +157,26 @@ test('le frontend n’introduit pas de stockage persistant ou d’injection HTML
     assert.match(app, /app\.readerView\.render\(article\);\s*app\.articlesView\.updateArticle\(article\);\s*return;/);
 });
 
+test('les paramètres exposent l’email et la fréquence des recommandations', () => {
+    const settings = read('assets/js/views/settings.js');
+    const app = read('assets/js/app.js');
+    const client = read('assets/js/api/client.js');
+
+    assert.match(settings, /field\('Adresse email', email/);
+    assert.match(settings, /type:\s*'email'/);
+    assert.match(settings, /autocomplete:\s*'email'/);
+    assert.match(settings, /maxLength:\s*254/);
+    assert.match(settings, /field\('Fréquence des recommandations', frequency/);
+    for (const frequency of ['never', 'daily', 'weekly', 'monthly']) {
+        assert.ok(settings.includes(`value: '${frequency}'`));
+    }
+    assert.match(settings, /email === '' && frequency !== 'never'/);
+    assert.match(settings, /onUpdateProfile/);
+    assert.match(app, /app\.api\.updateProfile\(profile\)/);
+    assert.match(app, /dataOf\(await app\.api\.getSettings\(\)\)/);
+    assert.match(client, /request\('\/settings\/profile', \{ method: 'PATCH', body: profile \}\)/);
+});
+
 test('les cartes de liste ne rendent pas les résumés d’article', () => {
     const articles = read('assets/js/views/articles.js');
     const cardSource = articles.slice(

@@ -36,12 +36,14 @@ final class AuthenticationApiTest extends TestCase
         self::assertSame(1, $session->regenerationCount);
         $loginData = $this->decode($login);
         self::assertSame('alice', $loginData['data']['user']['username']);
+        self::assertNull($loginData['data']['user']['email']);
         self::assertArrayNotHasKey('password_hash', $loginData['data']['user']);
 
         $me = $kernel->handle(new Request('GET', '/api/auth/me'));
         self::assertSame(200, $me->status);
         $meData = $this->decode($me);
         self::assertSame('alice', $meData['data']['username']);
+        self::assertNull($meData['data']['email']);
         self::assertArrayNotHasKey('password_hash', $meData['data']);
         self::assertSame('no-store', $me->headers['Cache-Control']);
     }

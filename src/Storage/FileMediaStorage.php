@@ -35,7 +35,7 @@ final readonly class FileMediaStorage implements MediaStorage
                 throw new RuntimeException('La clé de média générée est invalide.');
             }
             $directory = dirname($path);
-            if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
+            if (!is_dir($directory) && !mkdir($directory, 0770, true) && !is_dir($directory)) {
                 throw new RuntimeException('Impossible de créer le répertoire de médias.');
             }
             $handle = @fopen($path, 'x');
@@ -58,7 +58,9 @@ final readonly class FileMediaStorage implements MediaStorage
                 throw $exception;
             }
             fclose($handle);
-            @chmod($path, 0600);
+            // The inherited ACL grants app and web runtimes access; 0640 keeps
+            // content readable to them without making it world-readable.
+            @chmod($path, 0640);
 
             return $key;
         }

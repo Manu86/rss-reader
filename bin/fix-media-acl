@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+media_root="${APP_MEDIA_PATH:-${project_root}/var/media}"
+cron_user="${1:-$(id -un)}"
+web_user="${2:-www-data}"
+
+if ! command -v setfacl >/dev/null 2>&1; then
+    echo "Erreur : la commande setfacl est requise." >&2
+    exit 1
+fi
+
+if ! media_root="$(realpath --canonicalize-existing -- "$media_root")" \
+    || [[ ! -d "$media_root" || "$media_root" == "/" ]]; then
+    echo "Erreur : le dossier de médias est introuvable ou invalide." >&2
+    exit 1
+fi
+
+if ! id "$cron_user" >/dev/null 2>&1; then
+    echo "Erreur : le compte cron '$cron_user' n'existe pas." >&2
+    exit 1
+fi
+
+if ! id "$web_user" >/dev/null 2>&1; then
+    echo "Erreur : le compte PHP-FPM '$web_user' n'existe pas." >&2
+    exit 1
+fi
+
+echo "Réparation des ACL de $media_root"
+echo "Compte cron : $cron_user"
+echo "Compte PHP-FPM : $web_user"
+
+sudo setfacl -R \
+    -m "u:${cron_user}:rwX,u:${web_user}:rwX,m::rwx" \
+    -- "$media_root"
+
+sudo find "$media_root" -type d -exec setfacl \
+    -m "d:u:${cron_user}:rwx,d:u:${web_user}:rwx,d:m::rwx" -- {} +
+
+sudo -u "$cron_user" test -r "$media_root"
+sudo -u "$web_user" test -r "$media_root"
+
+echo "ACL réparées : les médias existants et futurs sont accessibles aux deux comptes."

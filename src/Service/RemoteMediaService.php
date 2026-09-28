@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Exception\InvalidMediaException;
+use App\Exception\RemoteHttpException;
 use App\Http\SafeHttpClient;
+use App\Http\UrlResolver;
 use App\Storage\MediaStorage;
 
 final readonly class RemoteMediaService
 {
+    private const MAX_ARTICLE_HTML_BYTES = 1_000_000;
+
     /** @var array<string, string> */
     private const MIME_EXTENSIONS = [
         'image/jpeg' => 'jpg',
@@ -51,6 +55,39 @@ final readonly class RemoteMediaService
         }
 
         return $this->storage->store($userId, $response->body, $extension);
+    }
+
+    public function downloadArticleImage(
+        int $userId,
+        ?string $feedImageUrl,
+        ?string $articleUrl,
+    ): string {
+        if ($feedImageUrl !== null) {
+            return $this->download($userId, $feedImageUrl);
+        }
+        if ($articleUrl === null) {
+            throw new InvalidMediaException('Aucune image distante n’est disponible.');
+        }
+
+        $response = $this->http->get(
+            $articleUrl,
+            ['accept' => 'text/html,application/xhtml+xml;q=0.9'],
+            self::MAX_ARTICLE_HTML_BYTES,
+        );
+        if ($response->status < 200 || $response->status >= 300 || !$this->isHtml($response->header('content-type'))) {
+            throw new InvalidMediaException('La page de l’article n’est pas disponible.');
+        }
+
+        $parser = new ArticleImageMetadataParser(new UrlResolver());
+        foreach ($parser->parse($response->body, $response->finalUrl) as $candidate) {
+            try {
+                return $this->download($userId, $candidate);
+            } catch (InvalidMediaException|RemoteHttpException) {
+                continue;
+            }
+        }
+
+        throw new InvalidMediaException('La page de l’article ne fournit aucune image valide.');
     }
 
     public function discard(int $userId, string $key): void
@@ -135,5 +172,14 @@ final readonly class RemoteMediaService
 
         return in_array($declared, ['image/x-icon', 'image/vnd.microsoft.icon'], true)
             && in_array($actual, ['image/x-icon', 'image/vnd.microsoft.icon'], true);
+    }
+
+    private function isHtml(?string $contentType): bool
+    {
+        if ($contentType === null) {
+            return true;
+        }
+
+        return in_array($this->mime($contentType), ['text/html', 'application/xhtml+xml'], true);
     }
 }

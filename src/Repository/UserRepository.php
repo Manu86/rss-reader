@@ -39,7 +39,7 @@ final readonly class UserRepository
             ]);
             $this->pdo->commit();
 
-            return new User($userId, $username, $passwordHash, true);
+            return new User($userId, $username, $passwordHash, true, null);
         } catch (Throwable $exception) {
             if ($this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
@@ -51,7 +51,8 @@ final readonly class UserRepository
     public function findByUsername(string $username): ?User
     {
         $statement = $this->pdo->prepare(
-            'SELECT id, username, password_hash, is_active FROM users WHERE username = :username COLLATE NOCASE'
+            'SELECT id, username, password_hash, is_active, email FROM users '
+            . 'WHERE username = :username COLLATE NOCASE'
         );
         $statement->execute(['username' => $username]);
 
@@ -61,7 +62,7 @@ final readonly class UserRepository
     public function findActiveById(int $id): ?User
     {
         $statement = $this->pdo->prepare(
-            'SELECT id, username, password_hash, is_active FROM users '
+            'SELECT id, username, password_hash, is_active, email FROM users '
             . 'WHERE id = :id AND is_active = 1'
         );
         $statement->execute(['id' => $id]);
@@ -107,6 +108,36 @@ final readonly class UserRepository
         ]);
     }
 
+    public function updateProfile(int $userId, ?string $email, string $frequency, string $now): void
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $user = $this->pdo->prepare(
+                'UPDATE users SET email = :email, updated_at = :updated_at WHERE id = :id'
+            );
+            $user->execute([
+                'email' => $email,
+                'updated_at' => $now,
+                'id' => $userId,
+            ]);
+            $settings = $this->pdo->prepare(
+                'UPDATE user_settings SET recommendation_email_frequency = :frequency, '
+                . 'updated_at = :updated_at WHERE user_id = :user_id'
+            );
+            $settings->execute([
+                'frequency' => $frequency,
+                'updated_at' => $now,
+                'user_id' => $userId,
+            ]);
+            $this->pdo->commit();
+        } catch (Throwable $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $exception;
+        }
+    }
+
     public function setActiveByUsername(string $username, bool $active, string $now): bool
     {
         $statement = $this->pdo->prepare(
@@ -140,6 +171,7 @@ final readonly class UserRepository
             (string) $row['username'],
             (string) $row['password_hash'],
             (bool) $row['is_active'],
+            $row['email'] === null ? null : (string) $row['email'],
         );
     }
 }

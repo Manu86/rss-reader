@@ -247,6 +247,9 @@ the maintenance lock so cleanup cannot overlap feed imports.
 Cron calls CLI, never a public HTTP endpoint.
 
 Hourly processing includes feed synchronization and retention cleanup.
+It then evaluates recommendation email schedules and sends due digests. Email
+failures are isolated per user and never roll back feed synchronization. The
+last-send timestamp advances only after the configured transport accepts a message.
 
 One feed failure must not stop processing unrelated feeds.
 
@@ -268,6 +271,15 @@ Typical values:
 -   session settings;
 -   HTTP timeouts/limits;
 -   base URL when needed.
+-   email transport DSN and sender identity.
+
+Recommendation email delivery uses Symfony Mailer with SMTP or a local
+sendmail-compatible relay. It is synchronous inside the existing hourly CLI job; no queue or
+worker is introduced. Configuration uses `APP_MAILER_DSN`, `APP_MAIL_FROM`,
+optional `APP_MAIL_FROM_NAME` (default `RSS Reader`) and `APP_BASE_URL`.
+Without `APP_MAILER_DSN`, delivery is disabled and the CLI reports that the
+transport is not configured. Transport credentials belong only in the environment and are never
+stored or logged.
 
 `APP_SESSION_SECURE` defaults to enabled. It may be disabled only outside
 production for local HTTP development when `APP_ENV` is explicitly set to a

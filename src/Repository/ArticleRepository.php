@@ -27,7 +27,8 @@ final readonly class ArticleRepository
         );
         $missingImage = $this->pdo->prepare(
             'SELECT id FROM articles WHERE user_id = :user_id AND feed_id = :feed_id '
-            . 'AND deduplication_hash = :deduplication_hash AND image_path IS NULL'
+            . 'AND deduplication_hash = :deduplication_hash AND image_path IS NULL '
+            . 'AND (image_metadata_checked_at IS NULL OR :has_feed_image = 1)'
         );
         $updateExisting = $this->pdo->prepare(
             'UPDATE articles SET title = :title, url = :url, author = :author, '
@@ -36,7 +37,7 @@ final readonly class ArticleRepository
             . 'AND deduplication_hash = :deduplication_hash'
         );
         $inserted = 0;
-        /** @var array<int, array{id: int, image_url: string}> $mediaCandidates */
+        /** @var array<int, array{id: int, image_url: string|null, article_url: string|null, metadata_fallback: bool}> $mediaCandidates */
         $mediaCandidates = [];
         foreach ($articles as $article) {
             $statement->execute([
@@ -58,24 +59,29 @@ final readonly class ArticleRepository
             ]);
             if ($statement->rowCount() === 1) {
                 ++$inserted;
-                if ($article->imageUrl !== null) {
+                if ($article->imageUrl !== null || $article->url !== null) {
                     $articleId = (int) $this->pdo->lastInsertId();
                     $mediaCandidates[$articleId] = [
                         'id' => $articleId,
                         'image_url' => $article->imageUrl,
+                        'article_url' => $article->url,
+                        'metadata_fallback' => $article->imageUrl === null,
                     ];
                 }
-            } elseif ($article->imageUrl !== null) {
+            } elseif ($article->imageUrl !== null || $article->url !== null) {
                 $missingImage->execute([
                     'user_id' => $userId,
                     'feed_id' => $feedId,
                     'deduplication_hash' => $article->deduplicationHash,
+                    'has_feed_image' => $article->imageUrl !== null ? 1 : 0,
                 ]);
                 $articleId = $missingImage->fetchColumn();
                 if ($articleId !== false) {
                     $mediaCandidates[(int) $articleId] = [
                         'id' => (int) $articleId,
                         'image_url' => $article->imageUrl,
+                        'article_url' => $article->url,
+                        'metadata_fallback' => $article->imageUrl === null,
                     ];
                 }
             }
@@ -113,6 +119,20 @@ final readonly class ArticleRepository
         ]);
 
         return $statement->rowCount() === 1;
+    }
+
+    public function markImageMetadataChecked(int $articleId, int $userId, string $now): void
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE articles SET image_metadata_checked_at = :checked_at, updated_at = :updated_at '
+            . 'WHERE id = :id AND user_id = :user_id AND image_metadata_checked_at IS NULL'
+        );
+        $statement->execute([
+            'checked_at' => $now,
+            'updated_at' => $now,
+            'id' => $articleId,
+            'user_id' => $userId,
+        ]);
     }
 
     public function findImagePathOwned(int $articleId, int $userId): ?string

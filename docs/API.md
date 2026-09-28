@@ -86,7 +86,7 @@ its cookie.
 
 ### `GET /api/auth/me`
 
-Returns the current user or `401`.
+Returns the current user (`id`, `username` and nullable `email`) or `401`.
 
 ## Categories
 
@@ -387,6 +387,22 @@ All aggregations are scoped server-side to the authenticated user.
 
 ## Settings
 
+### `PATCH /api/settings/profile`
+
+Updates the authenticated user's optional profile email address:
+
+``` json
+{"email":"user@example.org","recommendation_email_frequency":"weekly"}
+```
+
+The email is trimmed and must be valid and at most 254 characters. The
+frequency is required and must be `never`, `daily`, `weekly` or `monthly`.
+An empty email is accepted only with `never` and clears the address. The
+address is not a login identifier and does not need to be unique. Both values
+are changed atomically. The endpoint returns the updated public user and
+frequency, requires a valid CSRF token, rejects unknown fields and never
+accepts a user identifier.
+
 ### `GET /api/settings`
 
 Returns the authenticated user's V1 application settings. The
@@ -394,7 +410,7 @@ Returns the authenticated user's V1 application settings. The
 the frontend's fixed 25-article batches:
 
 ``` json
-{"data":{"articles_per_page":25,"theme":"light"}}
+{"data":{"articles_per_page":25,"theme":"light","recommendation_email_frequency":"never"}}
 ```
 
 No user identifier is accepted; settings are always resolved from the
