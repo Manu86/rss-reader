@@ -198,10 +198,23 @@ Choose an image candidate from standard feed/media/content sources when
 available.
 
 When an article has no image candidate in the feed, the synchronizer may fetch
-the article page and inspect only standard image metadata (`og:image` and
-`twitter:image`). It does not use that page to reconstruct the article text.
+the article page and inspect standard image metadata (`og:image` and
+`twitter:image`). When the page publishes none, the illustration is looked up in
+the body of that same page: images inside `header`, `nav`, `footer` and `aside`,
+images whose file name marks them as decorative (logo, icon, avatar, badge,
+banner…) and images declaring a side below 200 pixels are discarded. Remaining
+candidates keep the document order, and the real pixel size is checked on
+download, so a small image is never stored. This only reuses a page already
+fetched for the metadata lookup, so it adds no request. It does not use that
+page to reconstruct the article text.
 Candidate page and image URLs pass through the same centralized safe HTTP
 client and validation pipeline as feed-provided media.
+
+Article-page HTML uses a dedicated browser-compatible User-Agent because some
+CDNs reject non-browser page requests even though they publish public Open Graph
+metadata. The value still identifies RSS Reader and applies only to this bounded
+HTML lookup. Feed retrieval, discovery, favicons and image downloads retain the
+ordinary `RSSReader/1.0` User-Agent.
 
 Download through the centralized safe HTTP client.
 
@@ -272,7 +285,8 @@ Current implementation details:
 -   candidates are fetched only after the article/feed transaction has
     completed, so remote I/O never holds an SQLite write transaction;
 -   when the feed has no article image, standard Open Graph/Twitter image
-    metadata from the article page is used as a bounded fallback;
+    metadata from the article page is used as a bounded fallback, then the
+    illustration found in the body of that page;
 -   JPEG, PNG, GIF, WebP and structurally valid ICO files are accepted after
     content inspection; SVG and MIME/content mismatches are rejected;
 -   media failure is non-fatal and missing media is retried on a later

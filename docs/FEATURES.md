@@ -210,7 +210,8 @@ up to forty-eight unread article suggestions:
   tags) matched via FTS against unread candidates, with additional weight for
   shared tags and the same category as favorites;
 - candidates are unread articles of the user's own feeds, never favorited
-  already, never other users' articles;
+  already, never other users' articles. They enter the candidate set through
+  either an FTS match, a shared tag or a category shared with a recent favorite;
 - a minimum score of 2 is required for an article to be recommended: on top of
   the base point, it needs at least one shared tag (+2), the same category as a
   favorite (+2), or an FTS relevance of at least one third of the best
@@ -226,6 +227,9 @@ up to forty-eight unread article suggestions:
 - a freshness bonus of up to +1 point favors recent articles and decreases
   progressively over 15 days; age affects ranking but does not by itself
   exclude an eligible article;
+- FTS and affinity candidates are preselected with a per-feed window before the
+  bounded global candidate limit is applied, so a prolific source cannot hide
+  otherwise eligible articles from other feeds;
 - no single feed may occupy more than five places in the pool, therefore in the
   view: a feed close to the user's favorites and rich in articles cannot take the
   whole list. The limit is applied when building the pool, since capping only the
@@ -233,13 +237,17 @@ up to forty-eight unread article suggestions:
   the view returns fewer than 48 articles when the user follows fewer than ten
   sources with eligible articles, and the empty state is not involved: the list
   is simply shorter;
-- the 96 best eligible suggestions form a pool, from which 48 are selected at
-  random for display; a small bounded random jitter (at most 0,6 point on a
+- the 96 best eligible suggestions form a pool, from which 48 are selected by
+  a score-weighted random draw for display; stronger suggestions are therefore
+  more likely to survive the draw without making the list static. A small
+  bounded random jitter (at most 0,6 point on a
   score whose relevance weight is 3) is applied before building the pool so
   equally close matches can vary. The pool is deliberately larger than the
   displayed list so the random draw stays meaningful; with an equally sized pool
   the draw would return the whole pool and the variety would be lost;
 - no AI, no external service, no cross-user data;
+- recent favorite signals are ordered by their dedicated favorite timestamp;
+  reading, synchronization and media updates do not make an old favorite recent;
 - the view shows the standard empty state when the user has no favorite
   history; the list may also be empty when no relevant unread article is found
   or when none of them reaches the minimum score. At most 48 articles are

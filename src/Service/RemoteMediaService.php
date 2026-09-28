@@ -13,6 +13,12 @@ use App\Storage\MediaStorage;
 final readonly class RemoteMediaService
 {
     private const MAX_ARTICLE_HTML_BYTES = 1_000_000;
+    /**
+     * Côté minimal, en pixels, d'une image tirée du corps de la page. Les
+     * logos et photos d'auteur qui échappent au filtrage du parseur sont
+     * rejetés ici, avant tout stockage.
+     */
+    private const MIN_CONTENT_IMAGE_SIDE = 200;
 
     /** @var array<string, string> */
     private const MIME_EXTENSIONS = [
@@ -31,9 +37,10 @@ final readonly class RemoteMediaService
         private int $maxWidth,
         private int $maxHeight,
         private int $maxPixels,
+        private string $articlePageUserAgent = 'RSSReader/1.0',
     ) {}
 
-    public function download(int $userId, string $url): string
+    public function download(int $userId, string $url, int $minSide = 1): string
     {
         $response = $this->http->get($url, ['accept' => 'image/webp,image/png,image/jpeg,image/gif,image/x-icon'], $this->maxBytes);
         if ($response->status < 200 || $response->status >= 300) {
@@ -48,6 +55,9 @@ final readonly class RemoteMediaService
         if ($width < 1 || $height < 1 || $width > $this->maxWidth || $height > $this->maxHeight
             || $width * $height > $this->maxPixels) {
             throw new InvalidMediaException('Les dimensions du média dépassent les limites autorisées.');
+        }
+        if ($width < $minSide || $height < $minSide) {
+            throw new InvalidMediaException('Le média est trop petit pour illustrer un article.');
         }
         $extension = self::MIME_EXTENSIONS[$actualMime] ?? null;
         if ($extension === null) {
@@ -73,6 +83,7 @@ final readonly class RemoteMediaService
             $articleUrl,
             ['accept' => 'text/html,application/xhtml+xml;q=0.9'],
             self::MAX_ARTICLE_HTML_BYTES,
+            $this->articlePageUserAgent,
         );
         if ($response->status < 200 || $response->status >= 300 || !$this->isHtml($response->header('content-type'))) {
             throw new InvalidMediaException('La page de l’article n’est pas disponible.');
@@ -82,6 +93,14 @@ final readonly class RemoteMediaService
         foreach ($parser->parse($response->body, $response->finalUrl) as $candidate) {
             try {
                 return $this->download($userId, $candidate);
+            } catch (InvalidMediaException|RemoteHttpException) {
+                continue;
+            }
+        }
+        // Aucun site social : on cherche l'illustration dans le corps de la page.
+        foreach ($parser->parseContentImages($response->body, $response->finalUrl) as $candidate) {
+            try {
+                return $this->download($userId, $candidate, self::MIN_CONTENT_IMAGE_SIDE);
             } catch (InvalidMediaException|RemoteHttpException) {
                 continue;
             }

@@ -166,6 +166,71 @@ final class MediaApiTest extends TestCase
         self::assertCount(1, $this->application->mediaStorage->media);
     }
 
+    public function testArticleBodyProvidesImageWhenNoMetadataIsPublished(): void
+    {
+        $feed = '<?xml version="1.0"?><rss version="2.0"><channel><title>Body</title>'
+            . '<item><guid>body-1</guid><title>Body image</title>'
+            . '<link>https://site.test/articles/body</link></item></channel></rss>';
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feed),
+            new TransportResponse(
+                200,
+                ['content-type' => 'text/html'],
+                '<html><body><header><img src="/logo.png"></header>'
+                    . '<article><img src="/illustration.png"></article></body></html>',
+            ),
+            new TransportResponse(200, ['content-type' => 'image/png'], $this->png(320, 240)),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+
+        $response = $kernel->handle(new Request(
+            'POST',
+            '/api/feeds',
+            ['content-type' => 'application/json', 'x-csrf-token' => $csrf],
+            '{"feed_url":"https://feeds.test/body.xml","category_id":null}',
+        ));
+
+        self::assertSame(201, $response->status);
+        $statement = $this->pdo->query('SELECT image_path FROM articles');
+        self::assertNotFalse($statement);
+        $article = $statement->fetch();
+        self::assertIsArray($article);
+        self::assertIsString($article['image_path']);
+        self::assertCount(1, $this->application->mediaStorage->media);
+    }
+
+    public function testArticleBodyImageIsRejectedWhenItIsTooSmall(): void
+    {
+        $feed = '<?xml version="1.0"?><rss version="2.0"><channel><title>Body</title>'
+            . '<item><guid>body-2</guid><title>Small body image</title>'
+            . '<link>https://site.test/articles/small</link></item></channel></rss>';
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feed),
+            new TransportResponse(
+                200,
+                ['content-type' => 'text/html'],
+                '<html><body><img src="/pastille.png"></body></html>',
+            ),
+            new TransportResponse(200, ['content-type' => 'image/png'], $this->png()),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+
+        $response = $kernel->handle(new Request(
+            'POST',
+            '/api/feeds',
+            ['content-type' => 'application/json', 'x-csrf-token' => $csrf],
+            '{"feed_url":"https://feeds.test/small.xml","category_id":null}',
+        ));
+
+        self::assertSame(201, $response->status);
+        $statement = $this->pdo->query('SELECT image_path FROM articles');
+        self::assertNotFalse($statement);
+        $article = $statement->fetch();
+        self::assertIsArray($article);
+        self::assertNull($article['image_path']);
+        self::assertCount(0, $this->application->mediaStorage->media);
+    }
+
     /** @return array{ApiKernel, string} */
     private function authenticatedKernel(
         string $username,
@@ -216,15 +281,27 @@ final class MediaApiTest extends TestCase
         return $content;
     }
 
-    private function png(): string
+    private function png(int $width = 1, int $height = 1): string
     {
-        $image = base64_decode(
-            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-            true,
-        );
-        self::assertIsString($image);
+        if ($width === 1 && $height === 1) {
+            $image = base64_decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+                true,
+            );
+            self::assertIsString($image);
 
-        return $image;
+            return $image;
+        }
+
+        $canvas = imagecreatetruecolor(max(1, $width), max(1, $height));
+        self::assertNotFalse($canvas);
+        ob_start();
+        imagepng($canvas);
+        $encoded = ob_get_clean();
+        imagedestroy($canvas);
+        self::assertIsString($encoded);
+
+        return $encoded;
     }
 
     /** @return array<string, mixed> */

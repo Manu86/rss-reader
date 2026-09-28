@@ -184,6 +184,21 @@ test('les paramètres exposent l’email et la fréquence des recommandations', 
     assert.match(client, /request\('\/settings\/profile', \{ method: 'PATCH', body: profile \}\)/);
 });
 
+test('les paramètres affichent la section apparence en premier', () => {
+    const settings = read('assets/js/views/settings.js');
+    const appearance = settings.indexOf('view.appendChild(this.renderAppearanceSection())');
+    const profile = settings.indexOf('view.appendChild(this.renderProfileSection())');
+    const refresh = settings.indexOf('view.appendChild(this.renderFeedRefreshSection())');
+    const opml = settings.indexOf('view.appendChild(this.renderOpmlSection())');
+    const password = settings.indexOf('view.appendChild(this.renderPasswordSection())');
+
+    assert.ok(appearance >= 0);
+    assert.ok(appearance < profile);
+    assert.ok(profile < refresh);
+    assert.ok(refresh < opml);
+    assert.ok(opml < password);
+});
+
 test('les cartes de liste ne rendent pas les résumés d’article', () => {
     const articles = read('assets/js/views/articles.js');
     const cardSource = articles.slice(
@@ -299,7 +314,7 @@ test('le lecteur mobile propose un retour en bas d’article, comme en haut', ()
     assert.match(css, /@media\s*\(min-width:\s*70\.0625rem\)\s*\{\s*\.reader-back-button-bottom\s*\{\s*display:\s*none/);
 });
 
-test('la navigation place Recommandé en première position', () => {
+test('la navigation place Recommandé en premier et Tous après Lus', () => {
     const app = read('assets/js/app.js');
     const main = app.match(/const main = \[([\s\S]*?)\n    \];/);
     assert.ok(main, 'la liste principale de navigation est introuvable');
@@ -307,9 +322,9 @@ test('la navigation place Recommandé en première position', () => {
         .map((match) => ({ label: match[1], route: match[2] }));
     assert.deepStrictEqual(entries, [
         { label: 'Recommandé', route: 'recommendations' },
-        { label: 'Tous', route: 'home' },
         { label: 'Non lus', route: 'unread' },
         { label: 'Lus', route: 'read' },
+        { label: 'Tous', route: 'home' },
         { label: 'Favoris', route: 'favorites' },
     ]);
 });

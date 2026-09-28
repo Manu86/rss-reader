@@ -135,6 +135,7 @@ image_path NULL
 image_metadata_checked_at NULL
 is_read
 is_favorite
+favorited_at NULL
 deduplication_hash
 created_at
 updated_at
@@ -156,6 +157,9 @@ Rules:
     later day is a distinct article and is inserted normally;
 -   `discovered_at` is set on first import and remains stable;
 -   synchronization must not reset `is_read` or `is_favorite`;
+-   `favorited_at` records the UTC time at which the article most recently
+    became a favorite. It is cleared when the favorite is removed and is not
+    changed by reading, synchronization or media updates;
 -   `image_metadata_checked_at` records when the article-page image metadata
     fallback was attempted; it is set only for articles without a feed image
     candidate and prevents repeating that fallback on every synchronization;
@@ -261,6 +265,9 @@ Store migrations under `migrations/`, for example:
 006_users_email.sql
 007_recommendation_email_delivery.sql
 008_article_image_metadata_checked.sql
+009_merge_republished_articles.sql
+010_article_favorited_at.sql
+011_retry_article_image_metadata.sql
 ```
 
 Track applied versions in a migration table.

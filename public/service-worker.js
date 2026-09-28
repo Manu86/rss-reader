@@ -1,9 +1,9 @@
-const CACHE_NAME = 'rss-reader-static-v80';
+const CACHE_NAME = 'rss-reader-static-v82';
 const STATIC_ASSETS = [
     '/',
     '/manifest.webmanifest',
     '/assets/css/app.css?v=64',
-    '/assets/js/app.js?v=44',
+    '/assets/js/app.js?v=46',
     '/assets/js/api/client.js?v=3',
     '/assets/js/router.js?v=27',
     '/assets/js/components/dialog.js',
@@ -15,7 +15,7 @@ const STATIC_ASSETS = [
     '/assets/js/views/login.js',
     '/assets/js/views/management.js?v=3',
     '/assets/js/views/reader.js?v=31',
-    '/assets/js/views/settings.js?v=6',
+    '/assets/js/views/settings.js?v=7',
     '/assets/icons/icon.svg',
     '/assets/icons/icon-192.svg',
     '/assets/icons/icon-512.svg',

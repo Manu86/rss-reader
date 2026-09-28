@@ -38,6 +38,9 @@ return [
     'http_max_response_bytes' => (int) (getenv('APP_HTTP_MAX_RESPONSE_BYTES') ?: 5242880),
     'http_max_redirects' => (int) (getenv('APP_HTTP_MAX_REDIRECTS') ?: 5),
     'http_user_agent' => getenv('APP_HTTP_USER_AGENT') ?: 'RSSReader/1.0',
+    'article_page_user_agent' => getenv('APP_ARTICLE_PAGE_USER_AGENT')
+        ?: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
+            . '(KHTML, like Gecko) RSSReader/1.0 Chrome/140.0.0.0 Safari/537.36',
     'cron_lock_path' => getenv('APP_CRON_LOCK_PATH') ?: dirname(__DIR__) . '/var/tmp/feeds-refresh.lock',
     'media_path' => getenv('APP_MEDIA_PATH') ?: dirname(__DIR__) . '/var/media',
     'media_max_bytes' => (int) (getenv('APP_MEDIA_MAX_BYTES') ?: 2097152),

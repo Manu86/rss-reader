@@ -286,6 +286,7 @@ final readonly class ArticleRepository
         ?int $categoryId,
         bool $uncategorized,
         string $ftsQuery,
+        int $perFeedLimit,
         int $limit,
     ): array {
         [$where, $parameters] = $this->listWhere(
@@ -293,18 +294,31 @@ final readonly class ArticleRepository
             new ArticleListCriteria('unread', $categoryId, $uncategorized, null, 1, $limit),
         );
         $statement = $this->pdo->prepare(
-            $this->articleColumns() . ', bm25(articles_fts, 1.0, 1.0, 1.0, 0.1) AS relevance FROM articles_fts '
+            'WITH matches AS ('
+            . 'SELECT articles_fts.rowid AS article_id, a.feed_id, '
+            . 'COALESCE(a.published_at, a.discovered_at) AS article_date, '
+            . 'bm25(articles_fts, 1.0, 1.0, 1.0, 0.1) AS relevance FROM articles_fts '
             . 'INNER JOIN articles a ON a.id = articles_fts.rowid '
             . 'INNER JOIN feeds f ON f.id = a.feed_id AND f.user_id = a.user_id '
+            . 'WHERE articles_fts MATCH :search AND a.is_favorite = 0 AND ' . $where
+            . '), diversified AS ('
+            . 'SELECT article_id, relevance, ROW_NUMBER() OVER ('
+            . 'PARTITION BY feed_id ORDER BY relevance, article_date DESC, article_id DESC'
+            . ') AS feed_rank FROM matches'
+            . ') '
+            . $this->articleColumns() . ', diversified.relevance AS relevance FROM diversified '
+            . 'INNER JOIN articles a ON a.id = diversified.article_id '
+            . 'INNER JOIN feeds f ON f.id = a.feed_id AND f.user_id = a.user_id '
             . 'LEFT JOIN categories c ON c.id = f.category_id AND c.user_id = f.user_id '
-            . 'WHERE articles_fts MATCH :search AND ' . $where
-            . ' ORDER BY relevance, COALESCE(a.published_at, a.discovered_at) DESC, a.id DESC'
-            . ' LIMIT :limit'
+            . 'WHERE diversified.feed_rank <= :per_feed_limit '
+            . 'ORDER BY diversified.relevance, COALESCE(a.published_at, a.discovered_at) DESC, a.id DESC '
+            . 'LIMIT :limit'
         );
         $statement->bindValue(':search', $ftsQuery, PDO::PARAM_STR);
         foreach ($parameters as $name => $value) {
             $statement->bindValue(':' . $name, $value, PDO::PARAM_INT);
         }
+        $statement->bindValue(':per_feed_limit', $perFeedLimit, PDO::PARAM_INT);
         $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
         $statement->execute();
 
@@ -317,6 +331,87 @@ final readonly class ArticleRepository
         }
 
         return $matches;
+    }
+
+    /**
+     * Unread non-favorite articles sharing a tag or a category with the
+     * user's favorite signals. The per-feed window prevents a prolific feed
+     * from exhausting the bounded candidate set before scoring.
+     *
+     * @param list<string> $tags normalized lowercase tags
+     * @param list<int> $categoryIds
+     * @return list<Article>
+     */
+    public function listUnreadOwnedByAffinity(
+        int $userId,
+        ?int $categoryId,
+        bool $uncategorized,
+        array $tags,
+        array $categoryIds,
+        int $perFeedLimit,
+        int $limit,
+    ): array {
+        if ($tags === [] && $categoryIds === []) {
+            return [];
+        }
+
+        [$where, $parameters] = $this->listWhere(
+            $userId,
+            new ArticleListCriteria('unread', $categoryId, $uncategorized, null, 1, $limit),
+        );
+        $affinities = [];
+        foreach (array_values($categoryIds) as $index => $favoriteCategoryId) {
+            $name = 'favorite_category_' . $index;
+            $affinities[] = 'f.category_id = :' . $name;
+            $parameters[$name] = $favoriteCategoryId;
+        }
+        if ($tags !== []) {
+            $tagParameters = [];
+            foreach (array_values($tags) as $index => $tag) {
+                $name = 'favorite_tag_' . $index;
+                $tagParameters[] = ':' . $name;
+                $parameters[$name] = $tag;
+            }
+            $affinities[] = 'EXISTS (SELECT 1 FROM json_each('
+                . "CASE WHEN json_valid(a.tags) THEN a.tags ELSE '[]' END"
+                . ') AS article_tag WHERE lower(trim(CAST(article_tag.value AS TEXT))) IN ('
+                . implode(', ', $tagParameters) . '))';
+        }
+
+        $statement = $this->pdo->prepare(
+            'WITH affinity_candidates AS ('
+            . 'SELECT a.id AS article_id, a.feed_id, '
+            . 'ROW_NUMBER() OVER (PARTITION BY a.feed_id ORDER BY '
+            . 'COALESCE(a.published_at, a.discovered_at) DESC, a.id DESC) AS feed_rank '
+            . 'FROM articles a '
+            . 'INNER JOIN feeds f ON f.id = a.feed_id AND f.user_id = a.user_id '
+            . 'WHERE a.is_favorite = 0 AND ' . $where
+            . ' AND (' . implode(' OR ', $affinities) . ')'
+            . ') '
+            . $this->articleColumns() . ' FROM affinity_candidates '
+            . 'INNER JOIN articles a ON a.id = affinity_candidates.article_id '
+            . 'INNER JOIN feeds f ON f.id = a.feed_id AND f.user_id = a.user_id '
+            . 'LEFT JOIN categories c ON c.id = f.category_id AND c.user_id = f.user_id '
+            . 'WHERE affinity_candidates.feed_rank <= :per_feed_limit '
+            . 'ORDER BY COALESCE(a.published_at, a.discovered_at) DESC, a.id DESC '
+            . 'LIMIT :limit'
+        );
+        foreach ($parameters as $name => $value) {
+            $statement->bindValue(':' . $name, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+        $statement->bindValue(':per_feed_limit', $perFeedLimit, PDO::PARAM_INT);
+        $statement->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $statement->execute();
+
+        $articles = [];
+        while (($row = $statement->fetch()) !== false) {
+            $article = $this->hydrate($row);
+            if ($article !== null) {
+                $articles[] = $article;
+            }
+        }
+
+        return $articles;
     }
 
     public function countSearchOwned(int $userId, ArticleListCriteria $criteria, string $ftsQuery): int
@@ -372,6 +467,12 @@ final readonly class ArticleRepository
         if ($favorite !== null) {
             $assignments[] = 'is_favorite = :is_favorite';
             $parameters['is_favorite'] = $favorite ? 1 : 0;
+            if ($favorite) {
+                $assignments[] = 'favorited_at = COALESCE(favorited_at, :favorited_at_now)';
+                $parameters['favorited_at_now'] = $now;
+            } else {
+                $assignments[] = 'favorited_at = NULL';
+            }
         }
         $statement = $this->pdo->prepare(
             'UPDATE articles SET ' . implode(', ', $assignments)
@@ -391,7 +492,7 @@ final readonly class ArticleRepository
             'SELECT a.id, a.title, a.tags, f.category_id FROM articles a '
             . 'INNER JOIN feeds f ON f.id = a.feed_id AND f.user_id = a.user_id '
             . 'WHERE a.user_id = :user_id AND a.is_favorite = 1 '
-            . 'ORDER BY a.updated_at DESC, a.id DESC LIMIT :limit'
+            . 'ORDER BY a.favorited_at DESC, a.id DESC LIMIT :limit'
         );
         $statement->bindValue(':user_id', $userId, PDO::PARAM_INT);
         $statement->bindValue(':limit', $limit, PDO::PARAM_INT);

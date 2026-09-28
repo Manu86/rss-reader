@@ -22,6 +22,7 @@ final class AppConfigTest extends TestCase
         self::assertSame(5_242_880, $config->httpMaxResponseBytes);
         self::assertSame(5, $config->httpMaxRedirects);
         self::assertSame('RSSReader/1.0', $config->httpUserAgent);
+        self::assertStringContainsString('RSSReader/1.0 Chrome/', $config->articlePageUserAgent);
         self::assertStringEndsWith('/var/tmp/feeds-refresh.lock', $config->cronLockPath);
         self::assertStringEndsWith('/var/media', $config->mediaPath);
         self::assertSame(2_097_152, $config->mediaMaxBytes);
@@ -79,6 +80,19 @@ final class AppConfigTest extends TestCase
         self::assertSame('http://reader.example.org', $config->appBaseUrl);
     }
 
+    public function testArticlePageUserAgentCanBeConfiguredSeparately(): void
+    {
+        $config = $this->loadConfigWith([
+            'APP_ENV' => 'development',
+            'APP_SESSION_SECURE' => '0',
+            'APP_HTTP_USER_AGENT' => 'RSSReader/Feeds',
+            'APP_ARTICLE_PAGE_USER_AGENT' => 'Mozilla/5.0 RSSReader/Pages',
+        ]);
+
+        self::assertSame('RSSReader/Feeds', $config->httpUserAgent);
+        self::assertSame('Mozilla/5.0 RSSReader/Pages', $config->articlePageUserAgent);
+    }
+
     public function testMailerRequiresValidSenderAndBaseUrl(): void
     {
         $this->expectException(\RuntimeException::class);
@@ -102,6 +116,8 @@ final class AppConfigTest extends TestCase
             'APP_MAIL_FROM',
             'APP_MAIL_FROM_NAME',
             'APP_BASE_URL',
+            'APP_HTTP_USER_AGENT',
+            'APP_ARTICLE_PAGE_USER_AGENT',
         ];
         $previous = [];
         foreach ($keys as $key) {

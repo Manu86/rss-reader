@@ -63,9 +63,9 @@ Primary entries:
 
 ``` text
 Recommandé
-Tous
 Non lus
 Lus
+Tous
 Favoris
 
 Catégories
@@ -312,7 +312,7 @@ Settings UI contains:
 -   OPML import;
 -   OPML export.
 
-Section order is stable: profile, appearance, feed refresh, OPML, then
+Section order is stable: appearance, profile, feed refresh, OPML, then
 password change last. The password section is the destructive/rare action and
 stays at the bottom of the page.
 

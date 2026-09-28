@@ -172,6 +172,7 @@ Cover:
 -   disabled feed;
 -   HTTP failure/timeout;
 -   redirect;
+-   dedicated article-page User-Agent without leaking it to feed or image requests;
 -   conditional `ETag`/`Last-Modified` and `304`;
 -   preservation of read/favorite/discovered state;
 -   article remains when it disappears remotely;
@@ -185,6 +186,11 @@ Verify title, summary, content and author search, infinite-scroll loading, speci
 input, deletion consistency and strict user isolation.
 
 FTS5 must be available in the test environment.
+
+Recommendation tests cover strict user isolation, candidate generation from
+FTS, tags and categories, exclusion of read/favorite articles, recent-favorite
+ordering, per-feed diversification before and after scoring, weighted sampling,
+freshness and bounded result sizes.
 
 ## Retention
 

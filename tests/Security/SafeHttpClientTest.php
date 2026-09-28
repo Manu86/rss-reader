@@ -59,6 +59,26 @@ final class SafeHttpClientTest extends TestCase
         self::assertSame('https://example.org/rss.xml', $transport->requests[1]->url);
     }
 
+    public function testARequestCanUseAScopedUserAgentAcrossRedirects(): void
+    {
+        $transport = new FakeHttpTransport([
+            new TransportResponse(302, ['location' => '/article/final'], ''),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+        ]);
+        $client = $this->client($transport, ['example.org' => ['93.184.216.34']]);
+
+        $client->get(
+            'https://example.org/article',
+            ['accept' => 'text/html'],
+            2048,
+            'Mozilla/5.0 RSSReader/Page-Test',
+        );
+
+        self::assertCount(2, $transport->requests);
+        self::assertSame('Mozilla/5.0 RSSReader/Page-Test', $transport->requests[0]->userAgent);
+        self::assertSame('Mozilla/5.0 RSSReader/Page-Test', $transport->requests[1]->userAgent);
+    }
+
     public function testPublicRedirectToPrivateDestinationIsBlockedBeforeSecondRequest(): void
     {
         $transport = new FakeHttpTransport([
@@ -132,6 +152,19 @@ final class SafeHttpClientTest extends TestCase
             static fn() => $client->get('https://example.org/feed', ['Accept' => "text/xml\r\nX-Evil: yes"]),
         );
         self::assertSame('INVALID_HEADER', $injection->reason);
+        self::assertSame([], $transport->requests);
+    }
+
+    public function testUnsafeUserAgentIsRejected(): void
+    {
+        $transport = new FakeHttpTransport([]);
+        $client = $this->client($transport, ['example.org' => ['93.184.216.34']]);
+
+        $exception = $this->captureException(
+            static fn() => $client->get('https://example.org/', userAgent: "Browser\r\nX-Evil: yes"),
+        );
+
+        self::assertSame('INVALID_USER_AGENT', $exception->reason);
         self::assertSame([], $transport->requests);
     }
 

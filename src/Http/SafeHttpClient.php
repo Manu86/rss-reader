@@ -29,9 +29,14 @@ final readonly class SafeHttpClient
     ) {}
 
     /** @param array<string, string> $headers */
-    public function get(string $url, array $headers = [], ?int $maxResponseBytes = null): HttpResponse
-    {
+    public function get(
+        string $url,
+        array $headers = [],
+        ?int $maxResponseBytes = null,
+        ?string $userAgent = null,
+    ): HttpResponse {
         $headers = $this->validateHeaders($headers);
+        $userAgent = $this->validateUserAgent($userAgent ?? $this->userAgent);
         $bodyLimit = $maxResponseBytes ?? $this->maxResponseBytes;
         if ($bodyLimit < 1 || $bodyLimit > $this->maxResponseBytes) {
             throw new RemoteHttpException('INVALID_LIMIT', 'La limite de réponse HTTP est invalide.');
@@ -56,7 +61,7 @@ final readonly class SafeHttpClient
                 $this->connectTimeoutMs,
                 $this->timeoutMs,
                 $bodyLimit,
-                $this->userAgent,
+                $userAgent,
             ));
             if (strlen($transportResponse->body) > $bodyLimit) {
                 throw new RemoteHttpException('RESPONSE_TOO_LARGE', 'La réponse distante dépasse la taille autorisée.');
@@ -110,6 +115,17 @@ final readonly class SafeHttpClient
         }
 
         return $validated;
+    }
+
+    private function validateUserAgent(string $userAgent): string
+    {
+        $userAgent = trim($userAgent);
+        if ($userAgent === '' || strlen($userAgent) > 512
+            || preg_match('/[\x00-\x1f\x7f]/', $userAgent) === 1) {
+            throw new RemoteHttpException('INVALID_USER_AGENT', 'Le User-Agent HTTP sortant est invalide.');
+        }
+
+        return $userAgent;
     }
 
     private function isRedirect(int $status): bool

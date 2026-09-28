@@ -253,6 +253,13 @@ last-send timestamp advances only after the configured transport accepts a messa
 
 One feed failure must not stop processing unrelated feeds.
 
+Recommendations are computed locally by `RecommendationService`. The article
+repository supplies bounded, ownership-scoped FTS and tag/category-affinity
+candidate sets, each diversified per feed before the global candidate limit.
+The service merges and scores those sets, applies the final five-per-feed cap,
+then performs score-weighted sampling from the recommendation pool. A dedicated
+`favorited_at` timestamp determines which favorites are recent signals.
+
 Automatic feed synchronization selects active feeds through an explicit join
 with enabled users, then calls the same `FeedSynchronizationService` used by
 manual refresh. A configurable local `flock()` lock prevents overlapping
@@ -272,6 +279,13 @@ Typical values:
 -   HTTP timeouts/limits;
 -   base URL when needed.
 -   email transport DSN and sender identity.
+-   ordinary remote-request User-Agent and a distinct browser-compatible
+    User-Agent used only for article-page image metadata lookup.
+
+`APP_HTTP_USER_AGENT` defaults to `RSSReader/1.0` for feeds, discovery and media.
+`APP_ARTICLE_PAGE_USER_AGENT` controls only the bounded HTML fallback used when
+a feed provides no article image. Its default is browser-compatible while still
+including the `RSSReader/1.0` product token.
 
 Recommendation email delivery uses Symfony Mailer with SMTP or a local
 sendmail-compatible relay. It is synchronous inside the existing hourly CLI job; no queue or

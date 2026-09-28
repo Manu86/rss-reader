@@ -24,7 +24,8 @@ use Random\Randomizer;
 final readonly class RecommendationService implements RecommendationProvider
 {
     private const FAVORITE_SIGNAL_LIMIT = 20;
-    private const CANDIDATE_LIMIT = 120;
+    private const CANDIDATE_LIMIT = 480;
+    private const CANDIDATE_LIMIT_PER_FEED = 12;
     private const RECOMMENDATION_POOL_LIMIT = 96;
     private const RECOMMENDATION_LIMIT = 48;
     /**
@@ -44,7 +45,7 @@ final readonly class RecommendationService implements RecommendationProvider
     /**
      * Score minimal pour être recommandé. La base vaut 1, donc 2 exige une
      * vraie raison de matcher : au moins un tag partagé (+2), la même catégorie
-     * qu'un favori (+2), ou une pertinence FTS d'au plus un tiers du meilleur
+     * qu'un favori (+2), ou une pertinence FTS d'au moins un tiers du meilleur
      * candidat. En deçà, l'article ne partage qu'un mot banal et n'est pas
      * affiché. Le bruit n'entre pas dans ce calcul, pour que l'inclusion reste
      * reproductible d'un chargement à l'autre.
@@ -63,8 +64,8 @@ final readonly class RecommendationService implements RecommendationProvider
     private const JITTER = 0.6;
 
     /**
-     * Mots grammaticaux français : sans ce filtre, ils matchent presque tous
-     * les articles et rendent la sélection FTS indifférenciée.
+     * Mots grammaticaux français et anglais : sans ce filtre, ils matchent
+     * presque tous les articles et rendent la sélection FTS indifférenciée.
      */
     private const STOP_WORDS = [
         'alors', 'après', 'au', 'aucun', 'aucune', 'aujourd', 'aussi', 'autre', 'autres',
@@ -79,6 +80,16 @@ final readonly class RecommendationService implements RecommendationProvider
         'son', 'sont', 'sous', 'sur', 'ta', 'tandis', 'tellement', 'tes', 'tous', 'tout',
         'toute', 'toutes', 'très', 'tu', 'un', 'une', 'vers', 'voici', 'voilà', 'vos', 'votre',
         'vous', 'y',
+        'about', 'after', 'again', 'against', 'all', 'also', 'and', 'any', 'are', 'because',
+        'been', 'before', 'being', 'between', 'both', 'but', 'can', 'could', 'did', 'does',
+        'doing', 'down', 'during', 'each', 'few', 'for', 'from', 'further', 'had', 'has',
+        'have', 'having', 'her', 'here', 'hers', 'herself', 'him', 'himself', 'his', 'how',
+        'into', 'its', 'itself', 'just', 'more', 'most', 'other', 'our', 'ours', 'ourselves',
+        'out', 'over', 'own', 'same', 'she', 'should', 'some', 'such', 'than', 'that', 'the',
+        'their', 'theirs', 'them', 'themselves', 'then', 'there', 'these', 'they', 'this',
+        'those', 'through', 'too', 'under', 'until', 'very', 'was', 'were', 'what', 'when',
+        'where', 'which', 'while', 'who', 'whom', 'why', 'will', 'with', 'would', 'you',
+        'your', 'yours', 'yourself', 'yourselves',
     ];
 
     public function __construct(
@@ -102,22 +113,42 @@ final readonly class RecommendationService implements RecommendationProvider
         if (count($signals) === 0) {
             return [];
         }
+        [$favoriteTags, $favoriteCategories] = $this->affinities($signals);
+        $matchesById = [];
         $terms = $this->terms($signals);
-        if (count($terms) === 0) {
-            return [];
+        if ($terms !== []) {
+            foreach ($this->articles->searchUnreadOwnedWithRelevance(
+                $userId,
+                $categoryId,
+                $uncategorized,
+                $this->ftsQuery($terms),
+                self::CANDIDATE_LIMIT_PER_FEED,
+                self::CANDIDATE_LIMIT,
+            ) as $match) {
+                $matchesById[$match['article']->id] = $match;
+            }
         }
-        $matches = $this->articles->searchUnreadOwnedWithRelevance(
+        foreach ($this->articles->listUnreadOwnedByAffinity(
             $userId,
             $categoryId,
             $uncategorized,
-            $this->ftsQuery($terms),
+            $favoriteTags,
+            $favoriteCategories,
+            self::CANDIDATE_LIMIT_PER_FEED,
             self::CANDIDATE_LIMIT,
-        );
-        if (count($matches) === 0) {
+        ) as $article) {
+            $matchesById[$article->id] ??= ['article' => $article, 'relevance' => 0.0];
+        }
+        if ($matchesById === []) {
             return [];
         }
 
-        return $this->rank($matches, $signals, $limit ?? self::RECOMMENDATION_LIMIT);
+        return $this->rank(
+            array_values($matchesById),
+            $favoriteTags,
+            $favoriteCategories,
+            $limit ?? self::RECOMMENDATION_LIMIT,
+        );
     }
 
     /**
@@ -137,6 +168,7 @@ final readonly class RecommendationService implements RecommendationProvider
             $matched = preg_match_all('/[\p{L}\p{N}]+/u', $title, $matches);
             if (is_int($matched) && $matched > 0) {
                 foreach ($matches[0] as $term) {
+                    $term = $this->normalizeTerm($term);
                     if (!$this->isUsefulTerm($term)) {
                         continue;
                     }
@@ -153,6 +185,7 @@ final readonly class RecommendationService implements RecommendationProvider
                 }
             }
             foreach (is_array($signal['tags'] ?? null) ? $signal['tags'] : [] as $tag) {
+                $tag = $this->normalizeTerm($tag);
                 if ($this->isUsefulTerm($tag)
                     && !in_array($tag, $titleTerms, true)
                     && !in_array($tag, $tagTerms, true)
@@ -172,11 +205,42 @@ final readonly class RecommendationService implements RecommendationProvider
         if ($length < self::MIN_TERM_LENGTH || $length > self::MAX_TERM_LENGTH) {
             return false;
         }
-        if (in_array(mb_strtolower($term, 'UTF-8'), self::STOP_WORDS, true)) {
+        if (in_array($term, self::STOP_WORDS, true)) {
             return false;
         }
 
         return !preg_match('/\A[\p{N}]+\z/u', $term);
+    }
+
+    private function normalizeTerm(string $term): string
+    {
+        return mb_strtolower(trim($term), 'UTF-8');
+    }
+
+    /**
+     * @param list<array{id: int, title: string, tags: list<string>, category_id: int|null}> $signals
+     * @return array{list<string>, list<int>}
+     */
+    private function affinities(array $signals): array
+    {
+        $tags = [];
+        $categories = [];
+        foreach ($signals as $signal) {
+            if ($signal['category_id'] !== null) {
+                $categories[$signal['category_id']] = true;
+            }
+            foreach (is_array($signal['tags'] ?? null) ? $signal['tags'] : [] as $tag) {
+                if (!is_string($tag)) {
+                    continue;
+                }
+                $normalized = $this->normalizeTerm($tag);
+                if ($normalized !== '') {
+                    $tags[$normalized] = true;
+                }
+            }
+        }
+
+        return [array_keys($tags), array_keys($categories)];
     }
 
     /** @param list<string> $terms */
@@ -196,45 +260,28 @@ final readonly class RecommendationService implements RecommendationProvider
      * puis par l'identifiant.
      *
      * @param list<array{article: Article, relevance: float}> $matches
-     * @param list<array{id: int, title: string, tags: list<string>, category_id: int|null}> $signals
+     * @param list<string> $favoriteTags normalized lowercase tags
+     * @param list<int> $favoriteCategories
      * @return list<Article>
      */
-    private function rank(array $matches, array $signals, int $limit): array
-    {
-        $favoriteTags = [];
-        $favoriteCategories = [];
-        foreach ($signals as $signal) {
-            if ($signal['category_id'] !== null) {
-                $favoriteCategories[] = $signal['category_id'];
-            }
-            foreach (is_array($signal['tags'] ?? null) ? $signal['tags'] : [] as $tag) {
-                if (is_string($tag)) {
-                    $favoriteTags[] = $tag;
-                }
-            }
-        }
-
-        // Le favori qui a produit les termes matche lui aussi la requête FTS,
-        // et son titre est par nature très proche de la requête. Le garder dans
-        // la référence de normalisation écrasait la pertinence de tous les
-        // autres candidats, qui se retrouvait à zéro. On ne normalise donc que
-        // sur les candidats réellement recommandables.
-        $candidates = [];
-        foreach ($matches as $match) {
-            if (!$match['article']->favorite) {
-                $candidates[] = $match;
-            }
-        }
-
+    private function rank(
+        array $matches,
+        array $favoriteTags,
+        array $favoriteCategories,
+        int $limit,
+    ): array {
         $bestRelevance = 0.0;
-        foreach ($candidates as $match) {
+        foreach ($matches as $match) {
             $bestRelevance = max($bestRelevance, $match['relevance']);
         }
 
         $scored = [];
-        foreach ($candidates as $match) {
+        foreach ($matches as $match) {
             $article = $match['article'];
-            $tags = is_array($article->tags) ? $article->tags : [];
+            $tags = array_values(array_unique(array_map(
+                fn(string $tag): string => $this->normalizeTerm($tag),
+                is_array($article->tags) ? $article->tags : [],
+            )));
             $tagScore = count($favoriteTags) > 0 && count($tags) > 0
                 ? self::TAG_WEIGHT * count(array_intersect($tags, $favoriteTags))
                 : 0;
@@ -274,9 +321,38 @@ final readonly class RecommendationService implements RecommendationProvider
             return $this->mostRecentFirst($pool);
         }
 
-        $pool = $this->randomizer->shuffleArray($pool);
+        $pool = $this->weightedSample($pool, $limit);
 
-        return $this->mostRecentFirst(array_slice($pool, 0, $limit));
+        return $this->mostRecentFirst($pool);
+    }
+
+    /**
+     * Weighted sampling without replacement keeps variety while making a
+     * stronger recommendation more likely to survive the final draw than an
+     * article sitting at the bottom of the pool.
+     *
+     * @param list<array{score: float, article: Article}> $entries
+     * @return list<array{score: float, article: Article}>
+     */
+    private function weightedSample(array $entries, int $limit): array
+    {
+        $selected = [];
+        while ($entries !== [] && count($selected) < $limit) {
+            $total = array_sum(array_column($entries, 'score'));
+            $draw = ($this->randomizer->getInt(0, 1_000_000) / 1_000_000) * $total;
+            $cumulative = 0.0;
+            foreach ($entries as $index => $entry) {
+                $cumulative += $entry['score'];
+                if ($draw > $cumulative && $index !== array_key_last($entries)) {
+                    continue;
+                }
+                $selected[] = $entry;
+                array_splice($entries, $index, 1);
+                break;
+            }
+        }
+
+        return $selected;
     }
 
     /**

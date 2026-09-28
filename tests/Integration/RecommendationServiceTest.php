@@ -310,6 +310,68 @@ final class RecommendationServiceTest extends TestCase
         ))));
     }
 
+    public function testAProlificFeedDoesNotHideCandidatesFromOtherFeeds(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            11,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        for ($index = 1; $index <= 140; $index++) {
+            $this->insertArticle(
+                self::ALICE,
+                10,
+                title: 'Photovoltaïque ' . $index,
+                publishedAt: sprintf('2026-09-%02dT08:00:00Z', ($index % 28) + 1),
+            );
+        }
+        $otherFeed = $this->insertArticle(
+            self::ALICE,
+            20,
+            title: 'Photovoltaïque à découvrir dans un autre flux',
+            publishedAt: '2026-09-20T08:00:00Z',
+        );
+
+        $ids = $this->ids($this->recommendations->forUser(self::ALICE));
+
+        self::assertContains($otherFeed, $ids);
+        self::assertLessThanOrEqual(5, count(array_filter(
+            $this->recommendations->forUser(self::ALICE),
+            static fn(Article $article): bool => $article->feedId === 10,
+        )));
+    }
+
+    public function testUnreadFavoritesDoNotExhaustTheCandidateLimit(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            11,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        $feedIds = array_values(array_unique(array_merge([10, 20], range(40, 50))));
+        for ($index = 1; $index <= 140; $index++) {
+            $this->insertArticle(
+                self::ALICE,
+                $feedIds[$index % count($feedIds)],
+                title: 'Photovoltaïque favori ' . $index,
+                publishedAt: sprintf('2026-09-%02dT09:00:00Z', ($index % 28) + 1),
+                favorite: true,
+            );
+        }
+        $expected = $this->insertArticle(
+            self::ALICE,
+            20,
+            title: 'Photovoltaïque à découvrir',
+            publishedAt: '2026-09-28T08:00:00Z',
+        );
+
+        self::assertContains($expected, $this->ids($this->recommendations->forUser(self::ALICE)));
+    }
+
     public function testTheListNeverExceedsFortyEightArticles(): void
     {
         $this->insertArticle(
@@ -552,9 +614,8 @@ final class RecommendationServiceTest extends TestCase
         $tagged = $this->insertArticle(
             self::ALICE,
             20,
-            title: 'Dossier du mois',
+            title: 'Dossier sans correspondance textuelle',
             publishedAt: '2026-09-19T08:00:00Z',
-            author: 'Photovoltaïque',
             tags: ['photovoltaïque'],
         );
         $untagged = $this->insertArticle(
@@ -562,7 +623,6 @@ final class RecommendationServiceTest extends TestCase
             20,
             title: 'Autre dossier',
             publishedAt: '2026-09-20T08:00:00Z',
-            author: 'Photovoltaïque',
         );
 
         $ids = $this->ids($this->recommendations->forUser(self::ALICE));
@@ -594,22 +654,46 @@ final class RecommendationServiceTest extends TestCase
         $sameCategory = $this->insertArticle(
             self::ALICE,
             10,
-            title: 'Dossier du mois',
+            title: 'Dossier sans correspondance textuelle',
             publishedAt: '2026-09-19T08:00:00Z',
-            author: 'Photovoltaïque',
         );
         $otherCategory = $this->insertArticle(
             self::ALICE,
             20,
             title: 'Autre dossier',
             publishedAt: '2026-09-20T08:00:00Z',
-            author: 'Photovoltaïque',
         );
 
         $ids = $this->ids($this->recommendations->forUser(self::ALICE));
 
         self::assertEqualsCanonicalizing([$strong, $sameCategory], $ids);
         self::assertNotContains($otherCategory, $ids);
+    }
+
+    public function testReadingAnOldFavoriteDoesNotMakeItARecentSignal(): void
+    {
+        $oldest = $this->insertArticle(
+            self::ALICE,
+            10,
+            title: 'Ancien favori photovoltaïque',
+            publishedAt: '2026-01-01T08:00:00Z',
+            favorite: true,
+        );
+        for ($index = 1; $index <= 20; $index++) {
+            $this->insertArticle(
+                self::ALICE,
+                10,
+                title: 'Favori récent ' . $index,
+                publishedAt: sprintf('2026-09-%02dT08:00:00Z', $index),
+                favorite: true,
+            );
+        }
+        $repository = new ArticleRepository($this->pdo);
+        $repository->updateStateOwned($oldest, self::ALICE, true, null, '2026-10-01T08:00:00Z');
+
+        $signalIds = array_column($repository->listFavoriteSignals(self::ALICE, 20), 'id');
+
+        self::assertNotContains($oldest, $signalIds);
     }
 
     /**
@@ -767,9 +851,9 @@ final class RecommendationServiceTest extends TestCase
         $statement = $this->pdo->prepare(
             'INSERT INTO articles '
             . '(user_id, feed_id, title, author, published_at, discovered_at, content, tags, is_read, '
-            . 'is_favorite, deduplication_hash, created_at, updated_at) '
+            . 'is_favorite, favorited_at, deduplication_hash, created_at, updated_at) '
             . 'VALUES (:user_id, :feed_id, :title, :author, :published_at, :discovered_at, :content, :tags, '
-            . ':is_read, :is_favorite, :hash, :created_at, :updated_at)'
+            . ':is_read, :is_favorite, :favorited_at, :hash, :created_at, :updated_at)'
         );
         $statement->execute([
             'user_id' => $userId,
@@ -782,6 +866,7 @@ final class RecommendationServiceTest extends TestCase
             'tags' => $tags === null ? null : json_encode($tags, JSON_THROW_ON_ERROR),
             'is_read' => $read ? 1 : 0,
             'is_favorite' => $favorite ? 1 : 0,
+            'favorited_at' => $favorite ? $publishedAt : null,
             'hash' => hash('sha256', $userId . ':' . $feedId . ':' . $title),
             'created_at' => $publishedAt,
             'updated_at' => $publishedAt,

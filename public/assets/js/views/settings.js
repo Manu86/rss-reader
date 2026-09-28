@@ -460,8 +460,8 @@ export class SettingsView {
             ]));
         }
 
-        view.appendChild(this.renderProfileSection());
         view.appendChild(this.renderAppearanceSection());
+        view.appendChild(this.renderProfileSection());
         view.appendChild(this.renderFeedRefreshSection());
         view.appendChild(this.renderOpmlSection());
         view.appendChild(this.renderPasswordSection());

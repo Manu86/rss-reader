@@ -110,6 +110,7 @@ final class ApplicationFactory
                 $config->mediaMaxWidth,
                 $config->mediaMaxHeight,
                 $config->mediaMaxPixels,
+                $config->articlePageUserAgent,
             ),
         );
         $migrator = new Migrator($pdo, $projectRoot . '/migrations');
@@ -213,6 +214,7 @@ final class ApplicationFactory
             $config->mediaMaxWidth,
             $config->mediaMaxHeight,
             $config->mediaMaxPixels,
+            $config->articlePageUserAgent,
         );
         $feedSynchronization = new FeedSynchronizationService(
             $feedRepository,

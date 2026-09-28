@@ -371,6 +371,25 @@ final class ArticleApiTest extends TestCase
         self::assertFalse($this->decode($updated)['data']['is_read']);
         self::assertTrue($this->decode($updated)['data']['is_favorite']);
         self::assertSame(1, $this->countUnread($this->aliceId));
+        $favoritedAt = $this->pdo->query(
+            'SELECT favorited_at FROM articles WHERE id = ' . $articleId
+        );
+        self::assertNotFalse($favoritedAt);
+        self::assertNotNull($favoritedAt->fetchColumn());
+
+        $unfavorited = $kernel->handle(new Request(
+            'PATCH',
+            '/api/articles/' . $articleId,
+            ['content-type' => 'application/json', 'x-csrf-token' => $csrf],
+            '{"is_favorite":false}',
+        ));
+        self::assertSame(200, $unfavorited->status);
+        self::assertFalse($this->decode($unfavorited)['data']['is_favorite']);
+        $favoritedAt = $this->pdo->query(
+            'SELECT favorited_at FROM articles WHERE id = ' . $articleId
+        );
+        self::assertNotFalse($favoritedAt);
+        self::assertNull($favoritedAt->fetchColumn());
     }
 
     public function testCrossUserArticleAccessReturnsNotFoundAndListingNeverLeaks(): void
@@ -482,7 +501,7 @@ final class ArticleApiTest extends TestCase
             false,
             true,
         );
-        $unrelated = $this->insertArticle(
+        $sameCategory = $this->insertArticle(
             $this->aliceId,
             $this->aliceFeedId,
             'Recette de tarte',
@@ -512,7 +531,7 @@ final class ArticleApiTest extends TestCase
         self::assertContains($matching, $ids);
         self::assertNotContains($favorite, $ids);
         self::assertNotContains($unreadFavorite, $ids);
-        self::assertNotContains($unrelated, $ids);
+        self::assertContains($sameCategory, $ids);
         self::assertNotContains($bobPrivate, $ids);
 
         // Sans favoris de signal (historique vide), la réponse reste vide.

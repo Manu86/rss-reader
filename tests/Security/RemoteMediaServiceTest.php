@@ -90,6 +90,47 @@ final class RemoteMediaServiceTest extends TestCase
         $service->download(1, 'https://cdn.test/wide.png');
     }
 
+    public function testOnlyTheArticlePageUsesTheBrowserCompatibleUserAgent(): void
+    {
+        $storage = new MemoryMediaStorage();
+        $transport = new FakeHttpTransport([
+            new TransportResponse(
+                200,
+                ['content-type' => 'text/html'],
+                '<meta property="og:image" content="https://cdn.test/article.png">'
+            ),
+            new TransportResponse(200, ['content-type' => 'image/png'], $this->png()),
+        ]);
+        $http = new SafeHttpClient(
+            new RemoteUrlGuard(new UrlNormalizer(), new FakeDnsResolver([
+                'site.test' => ['93.184.216.34'],
+                'cdn.test' => ['93.184.216.35'],
+            ]), new IpAddressValidator()),
+            $transport,
+            new UrlResolver(),
+            100,
+            500,
+            1_000_000,
+            2,
+            'RSSReader/Test',
+        );
+        $service = new RemoteMediaService(
+            $http,
+            $storage,
+            100_000,
+            4096,
+            4096,
+            16_777_216,
+            'Mozilla/5.0 RSSReader/Page-Test',
+        );
+
+        $key = $service->downloadArticleImage(1, null, 'https://site.test/article');
+
+        self::assertStringEndsWith('.png', $key);
+        self::assertSame('Mozilla/5.0 RSSReader/Page-Test', $transport->requests[0]->userAgent);
+        self::assertSame('RSSReader/Test', $transport->requests[1]->userAgent);
+    }
+
     /** @param list<TransportResponse> $responses */
     private function service(
         array $responses,

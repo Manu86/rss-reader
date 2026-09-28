@@ -2,7 +2,7 @@ import { ApiError, NetworkError, createApiClient } from './api/client.js?v=3';
 import { closeDialog } from './components/dialog.js';
 import { showToast } from './components/feedback.js';
 import { ManagementView } from './views/management.js?v=3';
-import { SettingsView } from './views/settings.js?v=6';
+import { SettingsView } from './views/settings.js?v=7';
 import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js';
 import { createLoginView } from './views/login.js';
 import { ArticlesView } from './views/articles.js?v=27';
@@ -357,9 +357,9 @@ function renderNavigation() {
     }
     const main = [
         ['Recommandé', buildRoute('recommendations'), 'recommendations', app.recommendationCount],
-        ['Tous', buildRoute('home'), 'home', countFor('global', 'all')],
         ['Non lus', buildRoute('unread'), 'unread', countFor('global', 'unread')],
         ['Lus', buildRoute('read'), 'read', countFor('global', 'read')],
+        ['Tous', buildRoute('home'), 'home', countFor('global', 'all')],
         ['Favoris', buildRoute('favorites'), 'favorites', countFor('global', 'favorites')],
     ];
     setChildren(dom.mainNavigation, main.map(([label, href, name, count]) => navigationLink(
