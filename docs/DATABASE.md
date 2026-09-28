@@ -149,6 +149,11 @@ Rules:
 
 -   article and feed must belong to the same user;
 -   `(feed_id, deduplication_hash)` is unique;
+-   a republished item carrying a new GUID is merged into the article already
+    stored for the same feed with the same URL and title and the same UTC
+    publication day, instead of being inserted as a new row; the merge
+    preserves `is_read`, `is_favorite` and `discovered_at`; a rebroadcast on a
+    later day is a distinct article and is inserted normally;
 -   `discovered_at` is set on first import and remains stable;
 -   synchronization must not reset `is_read` or `is_favorite`;
 -   `image_metadata_checked_at` records when the article-page image metadata

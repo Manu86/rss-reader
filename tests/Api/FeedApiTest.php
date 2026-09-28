@@ -141,6 +141,44 @@ final class FeedApiTest extends TestCase
         self::assertNotSame($aliceId, $bobId);
     }
 
+    public function testDuplicateInTheSameCategoryIsRejectedWithAnExplicitMessage(): void
+    {
+        [$aliceKernel, $aliceCsrf, $aliceId] = $this->authenticatedKernel('alice', 'correct horse battery staple');
+        $categoryId = $this->insertCategory($aliceId, 'Techniques');
+        self::assertSame(201, $this->createFeed(
+            $aliceKernel,
+            $aliceCsrf,
+            'Premier',
+            'https://example.org/feed',
+            $categoryId,
+        )->status);
+
+        $duplicate = $this->createFeed(
+            $aliceKernel,
+            $aliceCsrf,
+            'Doublon même catégorie',
+            'https://example.org/feed',
+            $categoryId,
+        );
+        self::assertSame(409, $duplicate->status);
+        $body = $this->decode($duplicate);
+        self::assertSame('FEED_ALREADY_EXISTS', $body['error']['code']);
+        self::assertSame('Cet abonnement existe déjà.', $body['error']['message']);
+
+        $duplicateInAnotherCategory = $this->createFeed(
+            $aliceKernel,
+            $aliceCsrf,
+            'Doublon autre catégorie',
+            'https://example.org/feed',
+            $this->insertCategory($aliceId, 'Divers'),
+        );
+        self::assertSame(409, $duplicateInAnotherCategory->status);
+        self::assertSame('FEED_ALREADY_EXISTS', $this->decode($duplicateInAnotherCategory)['error']['code']);
+
+        $list = $this->decode($aliceKernel->handle(new Request('GET', '/api/feeds')));
+        self::assertCount(1, $list['data']);
+    }
+
     public function testDuplicateIsRejectedPerUserButAllowedForAnotherUser(): void
     {
         [$aliceKernel, $aliceCsrf] = $this->authenticatedKernel('alice', 'correct horse battery staple');

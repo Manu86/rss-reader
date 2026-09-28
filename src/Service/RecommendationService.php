@@ -43,7 +43,7 @@ final readonly class RecommendationService implements RecommendationProvider
     private const MIN_SCORE = 2.0;
     private const RELEVANCE_WEIGHT = 3.0;
     private const FRESHNESS_WEIGHT = 1.0;
-    private const FRESHNESS_WINDOW_SECONDS = 2_592_000;
+    private const FRESHNESS_WINDOW_SECONDS = 1_296_000;
     private const TAG_WEIGHT = 2;
     private const CATEGORY_WEIGHT = 2;
     /**

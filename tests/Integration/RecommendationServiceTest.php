@@ -10,10 +10,12 @@ use App\Model\Article;
 use App\Repository\ArticleRepository;
 use App\Repository\CategoryRepository;
 use App\Service\RecommendationService;
+use DateTimeImmutable;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Random\Engine\Mt19937;
 use Random\Randomizer;
+use Tests\Support\FrozenClock;
 
 final class RecommendationServiceTest extends TestCase
 {
@@ -282,6 +284,51 @@ final class RecommendationServiceTest extends TestCase
         self::assertGreaterThan(1, count(array_unique($firsts)));
     }
 
+    public function testTheFreshnessBonusIsExhaustedAfterFifteenDays(): void
+    {
+        $this->insertArticle(
+            self::ALICE,
+            11,
+            title: 'Le photovoltaïque en Aude',
+            publishedAt: '2026-09-01T08:00:00Z',
+            favorite: true,
+        );
+        $withinWindow = $this->insertArticle(
+            self::ALICE,
+            10,
+            title: 'Photovoltaïque',
+            publishedAt: '2026-09-23T08:00:00Z',
+        );
+        $beyondWindow = $this->insertArticle(
+            self::ALICE,
+            20,
+            title: 'Photovoltaïque',
+            publishedAt: '2026-09-13T08:00:00Z',
+        );
+
+        // Les deux candidats ont le meme score deterministe : le bonus de
+        // fraicheur est epuise au-dela de 15 jours. Son amplitude maximale (1)
+        // reste inferieure au bruit maximal (0,6 par article), donc la fraicheur
+        // oriente le classement sans jamais le decider a elle seule. On verifie
+        // les deux proprietes : l'age n'exclut aucun candidat eligible, et le
+        // plus recent passe devant dans la majorite des tirages.
+        $recentFirst = 0;
+        $olderFirst = 0;
+        for ($seed = 1; $seed <= 20; $seed++) {
+            $ids = $this->ids($this->serviceAt(new DateTimeImmutable('2026-09-28T12:00:00Z'), $seed)
+                ->forUser(self::ALICE));
+            self::assertContains($withinWindow, $ids, 'seed ' . $seed);
+            self::assertContains($beyondWindow, $ids, 'seed ' . $seed);
+            if ($ids[0] === $withinWindow) {
+                ++$recentFirst;
+            } else {
+                ++$olderFirst;
+            }
+        }
+
+        self::assertGreaterThan($olderFirst, $recentFirst);
+    }
+
     public function testTheCategoryBonusIsNeverOvercomeByTheJitter(): void
     {
         $this->insertArticle(
@@ -497,6 +544,16 @@ final class RecommendationServiceTest extends TestCase
             new ArticleRepository($this->pdo),
             new CategoryRepository($this->pdo),
             new Randomizer(new Mt19937($seed)),
+        );
+    }
+
+    private function serviceAt(DateTimeImmutable $now, int $seed): RecommendationService
+    {
+        return new RecommendationService(
+            new ArticleRepository($this->pdo),
+            new CategoryRepository($this->pdo),
+            new Randomizer(new Mt19937($seed)),
+            new FrozenClock($now),
         );
     }
 

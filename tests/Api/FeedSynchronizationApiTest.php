@@ -260,6 +260,114 @@ XML;
         self::assertSame('success', $results[1]['status']);
     }
 
+    public function testRepublishedItemWithNewGuidUpdatesTheExistingArticle(): void
+    {
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $this->fixture('republish-rss.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $this->fixture('republish-rss-updated.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+        $created = $this->createFeed($kernel, $csrf, 'https://feeds.test/republish.xml', null);
+        self::assertSame(201, $created->status);
+        $feedId = $this->decode($created)['data']['id'];
+        self::assertIsInt($feedId);
+        self::assertCount(1, $this->articles($feedId));
+        $discoveredAt = $this->articleByGuid($this->articles($feedId), 'rep-a')['discovered_at'];
+
+        $this->pdo->exec('UPDATE articles SET is_read = 1, is_favorite = 1 WHERE feed_id = ' . $feedId);
+        $refreshed = $kernel->handle(new Request(
+            'POST',
+            '/api/feeds/' . $feedId . '/refresh',
+            ['x-csrf-token' => $csrf],
+        ));
+        self::assertSame(200, $refreshed->status);
+
+        $articles = $this->articles($feedId);
+        self::assertCount(4, $articles);
+        $republished = $this->articleByGuid($articles, 'rep-a');
+        self::assertSame(1, $republished['is_read']);
+        self::assertSame(1, $republished['is_favorite']);
+        self::assertSame(
+            'Version republished avec un nouveau GUID',
+            trim(strip_tags((string) $republished['summary'])),
+        );
+        self::assertSame($discoveredAt, $republished['discovered_at']);
+    }
+
+    public function testDistinctArticlesSharingAGenericUrlAreNotMerged(): void
+    {
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $this->fixture('republish-rss.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $this->fixture('republish-rss-updated.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+        $created = $this->createFeed($kernel, $csrf, 'https://feeds.test/republish.xml', null);
+        $feedId = $this->decode($created)['data']['id'];
+        self::assertIsInt($feedId);
+
+        $kernel->handle(new Request(
+            'POST',
+            '/api/feeds/' . $feedId . '/refresh',
+            ['x-csrf-token' => $csrf],
+        ));
+
+        $articles = $this->articles($feedId);
+        self::assertCount(4, $articles);
+        $rootArticles = array_values(array_filter(
+            $articles,
+            static fn(array $article): bool => $article['url'] === 'https://site.test/',
+        ));
+        self::assertCount(2, $rootArticles);
+        self::assertSame(['Episode A', 'Episode B'], [
+            $rootArticles[0]['title'],
+            $rootArticles[1]['title'],
+        ]);
+    }
+
+    public function testRebroadcastOfAnEarlierEpisodeIsKeptAsADistinctArticle(): void
+    {
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $this->fixture('republish-rss.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $this->fixture('republish-rss-updated.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+        $created = $this->createFeed($kernel, $csrf, 'https://feeds.test/republish.xml', null);
+        $feedId = $this->decode($created)['data']['id'];
+        self::assertIsInt($feedId);
+
+        $kernel->handle(new Request(
+            'POST',
+            '/api/feeds/' . $feedId . '/refresh',
+            ['x-csrf-token' => $csrf],
+        ));
+
+        $articles = $this->articles($feedId);
+        // Le rediffus du 29 septembre partage l'URL et le titre de l'article du
+        // 28 septembre : seul le jour de publication les distingue, il doit donc
+        // rester un article distinct.
+        $rebroadcasts = array_values(array_filter(
+            $articles,
+            static fn(array $article): bool => $article['title'] === 'Le president resigne',
+        ));
+        self::assertCount(2, $rebroadcasts);
+        self::assertSame(
+            ['2026-09-28T08:30:00Z', '2026-09-29T08:00:00Z'],
+            [$rebroadcasts[0]['published_at'], $rebroadcasts[1]['published_at']],
+        );
+        self::assertNotSame($rebroadcasts[0]['id'], $rebroadcasts[1]['id']);
+    }
+
     /** @return array{ApiKernel, string} */
     private function authenticatedKernel(string $username, string $password, FakeHttpTransport $transport): array
     {

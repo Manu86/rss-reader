@@ -360,6 +360,11 @@ Provide clear states for:
 
 Do not replace the whole interface with raw API error text.
 
+When an API error code has a known user-facing meaning, show that specific
+text rather than the generic status-based message. In particular, duplicate
+subscription and duplicate category codes must state that the entry already
+exists, instead of the generic conflict wording.
+
 ## Optimistic UI
 
 Use optimistic updates only when failure can be safely reverted.

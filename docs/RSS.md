@@ -108,6 +108,18 @@ Never use title alone as identity.
 Database uniqueness on `(feed_id, deduplication_hash)` is the final
 duplicate guard.
 
+Because a publisher may republish an item under a new GUID, a republish is
+recognized before insertion: an incoming item whose URL and title are already
+stored for the same feed, published the same UTC day, is treated as the
+existing article and refreshed, even when its GUID differs.
+
+Both conditions are required. The title prevents merging distinct articles
+that share a non-specific URL, such as a site root URL repeated across many
+items of the same feed. The publication day prevents merging scheduled
+rebroadcasts: some feeds replay the same episode every week under an identical
+URL and title, and each airing is a distinct article. The rule is feed-agnostic
+and applies uniformly to every feed and every user.
+
 The same article identity in different feeds or different users remains
 independent.
 

@@ -333,7 +333,7 @@ eligible suggestions, computed only from local data (weighted FTS match against
 favorite titles and tags, plus affinity for shared tags and categories). FTS
 weights title, summary and content equally, while author matches receive a
 lower weight to avoid incidental author-only matches. Recent articles receive
-a small progressive freshness bonus, capped at one point over 30 days.
+a small progressive freshness bonus, capped at one point over 15 days.
 The response is `{data: [<article>]}` with the same article representation as
 `GET /api/articles` and is returned in one response. The list is empty when the user has no
 favorite history or no relevant unread candidates exist. Repeated calls may

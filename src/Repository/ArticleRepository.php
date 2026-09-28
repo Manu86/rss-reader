@@ -36,70 +36,128 @@ final readonly class ArticleRepository
             . 'tags = :tags, updated_at = :updated_at WHERE user_id = :user_id AND feed_id = :feed_id '
             . 'AND deduplication_hash = :deduplication_hash'
         );
+        // Un flux peut republier un item avec un nouveau GUID. L'identite de niveau 1
+        // (GUID) primerait alors, alors que l'URL et le titre designent le meme article.
+        // Le titre est exige pour ne jamais fusionner des articles distincts qui
+        // partagent une URL generique, comme la racine d'un site. Le meme jour de
+        // publication est egalement exige : certains flux reprogramment le meme episode
+        // chaque semaine sous une URL et un titre identiques, et ces rediffusions sont
+        // des articles distincts.
+        $republished = $this->pdo->prepare(
+            'SELECT id, CASE WHEN image_path IS NULL '
+            . 'AND (image_metadata_checked_at IS NULL OR :has_feed_image = 1) THEN 1 ELSE 0 END '
+            . 'AS wants_media FROM articles WHERE user_id = :user_id AND feed_id = :feed_id '
+            . 'AND url = :url AND title = :title AND deduplication_hash <> :deduplication_hash '
+            . 'AND date(published_at) = date(:published_at) '
+            . 'ORDER BY id LIMIT 1'
+        );
+        $updateById = $this->pdo->prepare(
+            'UPDATE articles SET title = :title, url = :url, author = :author, '
+            . 'published_at = :published_at, summary = :summary, content = :content, '
+            . 'tags = :tags, updated_at = :updated_at WHERE id = :id AND user_id = :user_id'
+        );
         $inserted = 0;
         /** @var array<int, array{id: int, image_url: string|null, article_url: string|null, metadata_fallback: bool}> $mediaCandidates */
         $mediaCandidates = [];
         foreach ($articles as $article) {
-            $statement->execute([
-                'user_id' => $userId,
-                'feed_id' => $feedId,
-                'guid' => $article->guid,
-                'guid_hash' => $article->guidHash,
-                'title' => $article->title,
-                'url' => $article->url,
-                'author' => $article->author,
-                'published_at' => $article->publishedAt,
-                'discovered_at' => $discoveredAt,
-                'summary' => $article->summary,
-                'content' => $article->content,
-                'tags' => $article->tags === [] ? null : json_encode(array_values($article->tags), JSON_UNESCAPED_UNICODE),
-                'deduplication_hash' => $article->deduplicationHash,
-                'created_at' => $discoveredAt,
-                'updated_at' => $discoveredAt,
-            ]);
-            if ($statement->rowCount() === 1) {
-                ++$inserted;
-                if ($article->imageUrl !== null || $article->url !== null) {
-                    $articleId = (int) $this->pdo->lastInsertId();
-                    $mediaCandidates[$articleId] = [
-                        'id' => $articleId,
-                        'image_url' => $article->imageUrl,
-                        'article_url' => $article->url,
-                        'metadata_fallback' => $article->imageUrl === null,
-                    ];
-                }
-            } elseif ($article->imageUrl !== null || $article->url !== null) {
-                $missingImage->execute([
+            $existingId = null;
+            $isRepublish = false;
+            $wantsMedia = false;
+            if ($article->url !== null) {
+                $republished->execute([
                     'user_id' => $userId,
                     'feed_id' => $feedId,
+                    'url' => $article->url,
+                    'title' => $article->title,
                     'deduplication_hash' => $article->deduplicationHash,
                     'has_feed_image' => $article->imageUrl !== null ? 1 : 0,
+                    'published_at' => $article->publishedAt,
                 ]);
-                $articleId = $missingImage->fetchColumn();
-                if ($articleId !== false) {
-                    $mediaCandidates[(int) $articleId] = [
-                        'id' => (int) $articleId,
-                        'image_url' => $article->imageUrl,
-                        'article_url' => $article->url,
-                        'metadata_fallback' => $article->imageUrl === null,
-                    ];
+                $row = $republished->fetch(PDO::FETCH_ASSOC);
+                if (is_array($row)) {
+                    $existingId = (int) $row['id'];
+                    $isRepublish = true;
+                    $wantsMedia = (int) $row['wants_media'] === 1;
                 }
             }
-            if ($statement->rowCount() !== 1) {
-                $updateExisting->execute([
+            if ($existingId === null) {
+                $statement->execute([
+                    'user_id' => $userId,
+                    'feed_id' => $feedId,
+                    'guid' => $article->guid,
+                    'guid_hash' => $article->guidHash,
                     'title' => $article->title,
                     'url' => $article->url,
                     'author' => $article->author,
                     'published_at' => $article->publishedAt,
+                    'discovered_at' => $discoveredAt,
                     'summary' => $article->summary,
                     'content' => $article->content,
                     'tags' => $article->tags === [] ? null : json_encode(array_values($article->tags), JSON_UNESCAPED_UNICODE),
-                    'updated_at' => $discoveredAt,
-                    'user_id' => $userId,
-                    'feed_id' => $feedId,
                     'deduplication_hash' => $article->deduplicationHash,
+                    'created_at' => $discoveredAt,
+                    'updated_at' => $discoveredAt,
                 ]);
+                if ($statement->rowCount() === 1) {
+                    ++$inserted;
+                    if ($article->imageUrl !== null || $article->url !== null) {
+                        $articleId = (int) $this->pdo->lastInsertId();
+                        $mediaCandidates[$articleId] = [
+                            'id' => $articleId,
+                            'image_url' => $article->imageUrl,
+                            'article_url' => $article->url,
+                            'metadata_fallback' => $article->imageUrl === null,
+                        ];
+                    }
+
+                    continue;
+                }
+                if ($article->imageUrl !== null || $article->url !== null) {
+                    $missingImage->execute([
+                        'user_id' => $userId,
+                        'feed_id' => $feedId,
+                        'deduplication_hash' => $article->deduplicationHash,
+                        'has_feed_image' => $article->imageUrl !== null ? 1 : 0,
+                    ]);
+                    $articleId = $missingImage->fetchColumn();
+                    if ($articleId !== false) {
+                        $existingId = (int) $articleId;
+                        $wantsMedia = true;
+                    }
+                }
             }
+            $updateParameters = [
+                'title' => $article->title,
+                'url' => $article->url,
+                'author' => $article->author,
+                'published_at' => $article->publishedAt,
+                'summary' => $article->summary,
+                'content' => $article->content,
+                'tags' => $article->tags === [] ? null : json_encode(array_values($article->tags), JSON_UNESCAPED_UNICODE),
+                'updated_at' => $discoveredAt,
+            ];
+            if ($existingId !== null && $wantsMedia
+                && ($article->imageUrl !== null || $article->url !== null)) {
+                $mediaCandidates[$existingId] = [
+                    'id' => $existingId,
+                    'image_url' => $article->imageUrl,
+                    'article_url' => $article->url,
+                    'metadata_fallback' => $article->imageUrl === null,
+                ];
+            }
+            if ($isRepublish) {
+                $updateById->execute($updateParameters + [
+                    'id' => $existingId,
+                    'user_id' => $userId,
+                ]);
+
+                continue;
+            }
+            $updateExisting->execute($updateParameters + [
+                'user_id' => $userId,
+                'feed_id' => $feedId,
+                'deduplication_hash' => $article->deduplicationHash,
+            ]);
         }
 
         return new ArticleInsertResult($inserted, array_values($mediaCandidates));

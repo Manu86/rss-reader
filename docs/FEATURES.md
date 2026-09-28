@@ -218,7 +218,7 @@ up to twenty-four unread article suggestions:
 - the selection favors the closest FTS matches and prefers articles that share
   tags or categories with recent favorites;
 - a freshness bonus of up to +1 point favors recent articles and decreases
-  progressively over 30 days; age affects ranking but does not by itself
+  progressively over 15 days; age affects ranking but does not by itself
   exclude an eligible article;
 - the 48 best eligible suggestions form a pool, from which 24 are selected at
   random for display; a small bounded random jitter (at most 0,6 point on a

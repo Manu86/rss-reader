@@ -34,6 +34,7 @@ final class MigrationTest extends TestCase
                 '006_users_email',
                 '007_recommendation_email_delivery',
                 '008_article_image_metadata_checked',
+                '009_merge_republished_articles',
             ],
             $this->migrator->migrate(),
         );
@@ -42,6 +43,34 @@ final class MigrationTest extends TestCase
         self::assertSame(1, $this->integerQuery(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'articles_fts'"
         ));
+    }
+
+    public function testRepublishedArticlesAreMergedAndRebroadcastsAreKept(): void
+    {
+        $this->migrator->migrate();
+        $this->insertUsers();
+        $this->pdo->exec("INSERT INTO feeds (id, user_id, name, feed_url, created_at, updated_at) "
+            . "VALUES (1, 1, 'Flux', 'https://example.org/feed', '2026-09-24T12:00:00Z', '2026-09-24T12:00:00Z')");
+        $this->insertArticle(630, 'guid-a', 'https://example.org/a', 'Un article', '2026-09-27T18:24:18Z', 1, 0);
+        $this->insertArticle(631, 'guid-b', 'https://example.org/a', 'Un article', '2026-09-27T18:23:54Z', 0, 1);
+        $this->insertArticle(674, 'guid-c', 'https://example.org/b', 'Emission', '2026-09-28T08:15:07Z', 0, 0);
+        $this->insertArticle(683, 'guid-d', 'https://example.org/b', 'Emission', '2026-10-05T08:15:07Z', 0, 0);
+
+        $this->migrator->migrate();
+        $this->pdo->exec('DELETE FROM schema_migrations WHERE version = \'009_merge_republished_articles\'');
+        $this->migrator->migrate();
+
+        $ids = $this->idList();
+        self::assertNotContains(631, $ids, 'Le republication du meme jour doit etre fusionnee');
+        self::assertContains(630, $ids);
+        self::assertContains(683, $ids, 'Une rediffusion ulterieure reste un article distinct');
+        self::assertContains(674, $ids);
+        self::assertCount(3, $ids);
+
+        $kept = $this->row(630);
+        self::assertSame(1, (int) $kept['is_read'], 'L etat de lecture du republication est conserve');
+        self::assertSame(1, (int) $kept['is_favorite'], 'L etat de favori du republication est conserve');
+        self::assertSame('guid-a', $kept['guid'], 'Le plus ancien article est conserve');
     }
 
     public function testUserSettingsThemeRejectsUnknownValues(): void
@@ -191,6 +220,49 @@ final class MigrationTest extends TestCase
                 'updated_at' => '2026-09-24T12:00:00Z',
             ]);
         }
+    }
+
+    private function insertArticle(
+        int $id,
+        string $guid,
+        string $url,
+        string $title,
+        string $publishedAt,
+        int $isRead,
+        int $isFavorite,
+    ): void {
+        $this->pdo->exec(
+            "INSERT INTO articles (id, user_id, feed_id, guid, title, url, published_at, "
+            . "discovered_at, is_read, is_favorite, deduplication_hash, created_at, updated_at) "
+            . "VALUES ({$id}, 1, 1, '{$guid}', '" . $title . "', '{$url}', '{$publishedAt}', "
+            . "'2026-09-24T12:00:00Z', {$isRead}, {$isFavorite}, 'hash-{$id}', "
+            . "'2026-09-24T12:00:00Z', '2026-09-24T12:00:00Z')"
+        );
+    }
+
+    /** @return list<int> */
+    private function idList(): array
+    {
+        $statement = $this->pdo->query('SELECT id FROM articles ORDER BY id');
+        self::assertNotFalse($statement);
+
+        $ids = [];
+        foreach ($statement->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $ids[] = (int) $id;
+        }
+
+        return $ids;
+    }
+
+    /** @return array<string, mixed> */
+    private function row(int $id): array
+    {
+        $statement = $this->pdo->prepare('SELECT * FROM articles WHERE id = :id');
+        $statement->execute(['id' => $id]);
+        $row = $statement->fetch(PDO::FETCH_ASSOC);
+        self::assertIsArray($row);
+
+        return $row;
     }
 
     private function integerQuery(string $sql): int

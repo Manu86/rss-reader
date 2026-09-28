@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Republication</title>
+    <link>https://site.test/</link>
+    <description>Exemple</description>
+    <item>
+      <guid isPermaLink="false">rep-b</guid>
+      <title>Le president resigne</title>
+      <link>https://site.test/articles/une-actualite</link>
+      <pubDate>Mon, 28 Sep 2026 08:30:00 GMT</pubDate>
+      <description><![CDATA[<p>Version republished avec un nouveau GUID</p>]]></description>
+    </item>
+    <item>
+      <guid isPermaLink="false">racine-a</guid>
+      <title>Episode A</title>
+      <link>https://site.test/</link>
+      <pubDate>Mon, 28 Sep 2026 09:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <guid isPermaLink="false">racine-b</guid>
+      <title>Episode B</title>
+      <link>https://site.test/</link>
+      <pubDate>Mon, 28 Sep 2026 09:30:00 GMT</pubDate>
+    </item>
+    <item>
+      <guid isPermaLink="false">rediff-c</guid>
+      <title>Le president resigne</title>
+      <link>https://site.test/articles/une-actualite</link>
+      <pubDate>Tue, 29 Sep 2026 08:00:00 GMT</pubDate>
+      <description><![CDATA[<p>Rediffusion le lendemain</p>]]></description>
+    </item>
+  </channel>
+</rss>

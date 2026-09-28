@@ -419,6 +419,13 @@ function apiErrorText(error) {
     const status = Number(error.status || error.statusCode || 0);
     const code = String(error.code || '').toUpperCase();
 
+    if (code === 'FEED_ALREADY_EXISTS') {
+        return 'Cet abonnement existe déjà. Choisissez-le dans la liste pour le configurer.';
+    }
+    if (code === 'CATEGORY_ALREADY_EXISTS') {
+        return 'Une catégorie porte déjà ce nom.';
+    }
+
     if (status === 401 || code === 'INVALID_CREDENTIALS' || code === 'AUTHENTICATION_FAILED') {
         return 'Identifiant ou mot de passe incorrect.';
     }
