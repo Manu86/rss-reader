@@ -5,8 +5,8 @@ import { ManagementView } from './views/management.js?v=3';
 import { SettingsView } from './views/settings.js?v=7';
 import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js';
 import { createLoginView } from './views/login.js';
-import { ArticlesView } from './views/articles.js?v=27';
-import { ReaderView } from './views/reader.js?v=31';
+import { ArticlesView } from './views/articles.js?v=28';
+import { ReaderView } from './views/reader.js?v=33';
 import { buildRoute, parseRoute } from './router.js?v=26';
 import { errorMessage, el, icon, setChildren } from './utils/dom.js';
 
@@ -557,6 +557,34 @@ function retryArticleList() {
     return loadArticles(context.route, 1, context.activeArticleId);
 }
 
+function articleNavigationOptions(articleId) {
+    const adjacent = app.articlesView?.getAdjacentArticleIds(articleId)
+        || { previousId: null, nextId: null };
+    const returnTo = app.articlesView?.getReturnTo()
+        || (app.route?.name === 'article' ? app.route.query.from : null)
+        || '/#/';
+    const href = (id) => id === null
+        ? null
+        : buildRoute('article', { articleId: id }, { from: returnTo });
+    return {
+        previousHref: href(adjacent.previousId),
+        nextHref: href(adjacent.nextId),
+    };
+}
+
+function renderReaderArticle(article) {
+    app.readerView.render(article, articleNavigationOptions(article?.id));
+}
+
+function returnToArticleList() {
+    const route = app.route || parseRoute(window.location.hash);
+    const listRoute = route.name === 'article'
+        ? parseRoute(route.query.from || '#/')
+        : route;
+    const target = routeUrl(listRoute);
+    window.location.hash = target.slice(target.indexOf('#'));
+}
+
 async function loadArticle(id, markRead = false) {
     app.readerView.renderLoading();
     try {
@@ -568,7 +596,7 @@ async function loadArticle(id, markRead = false) {
             app.articleListRouteUrl = null;
             await loadShell();
         }
-        app.readerView.render(article);
+        renderReaderArticle(article);
         app.articlesView.updateArticle(article);
         revealArticleFeedGroup(articleFeedOf(article));
     } catch (error) {
@@ -605,7 +633,7 @@ async function renderReading(route, options = {}) {
             pane: dom.readerPane,
             content: dom.readerContent,
             placeholder: dom.readerPlaceholder,
-            onBack: () => window.history.back(),
+            onBack: returnToArticleList,
             onToggleFavorite: toggleFavorite,
             onToggleRead: toggleRead,
         });
@@ -636,7 +664,7 @@ async function toggleArticle(id, changes) {
         await loadShell();
         app.articleListRouteUrl = null;
         if (app.route?.name === 'article' && Number(app.route.params.id) === Number(id)) {
-            app.readerView.render(article);
+            renderReaderArticle(article);
             app.articlesView.updateArticle(article);
             return;
         }

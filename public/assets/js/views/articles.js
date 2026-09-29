@@ -820,6 +820,24 @@ export class ArticlesView {
         return this.returnTo;
     }
 
+    getAdjacentArticleIds(articleIdValue) {
+        const articleId = positiveInteger(articleIdValue);
+        if (articleId === null || !this.list || typeof this.list.querySelectorAll !== 'function') {
+            return { previousId: null, nextId: null };
+        }
+        const articleIds = Array.from(this.list.querySelectorAll('[data-article-id]'))
+            .map((card) => positiveInteger(card.dataset?.articleId))
+            .filter((id) => id !== null);
+        const index = articleIds.indexOf(articleId);
+        if (index < 0) {
+            return { previousId: null, nextId: null };
+        }
+        return {
+            previousId: index > 0 ? articleIds[index - 1] : null,
+            nextId: index + 1 < articleIds.length ? articleIds[index + 1] : null,
+        };
+    }
+
     setActiveArticle(articleId) {
         if (!this.list || typeof this.list.querySelectorAll !== 'function') return;
         this.list.querySelectorAll('.article-card-link[aria-current="true"]').forEach((link) => {

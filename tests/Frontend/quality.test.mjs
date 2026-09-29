@@ -161,7 +161,7 @@ test('le frontend n’introduit pas de stockage persistant ou d’injection HTML
     const app = read('assets/js/app.js');
     assert.match(app, /app\.api\.updateArticle\(id, \{ is_read: true \}\)/);
     assert.match(app, /markArticleRead:\s*app\.route\.name === 'article' && previousRoute !== null/);
-    assert.match(app, /app\.readerView\.render\(article\);\s*app\.articlesView\.updateArticle\(article\);\s*return;/);
+    assert.match(app, /renderReaderArticle\(article\);\s*app\.articlesView\.updateArticle\(article\);\s*return;/);
 });
 
 test('les paramètres exposent l’email et la fréquence des recommandations', () => {
@@ -301,10 +301,11 @@ test('le lecteur mobile propose un retour en bas d’article, comme en haut', ()
 
     const footer = reader.slice(reader.indexOf("viewEl('div', { className: 'reader-footer' }"));
     assert.match(footer, /className: 'reader-footer'/);
-    assert.match(footer, /renderBackButton\(this\.callbacks\.onBack, 'reader-back-button-bottom'\)/);
 
     // Le pied de lecture est le dernier élément du corps de l'article.
-    const body = reader.slice(reader.indexOf('_articleChildren(article)'));
+    const body = reader.slice(reader.indexOf('_articleChildren(article,'));
+    assert.match(reader, /viewButton\('Retour à la liste'/);
+    assert.match(body, /renderBackButton\(this\.callbacks\.onBack, 'reader-back-button-bottom'\)/);
     assert.ok(
         body.indexOf("className: 'reader-footer'") > body.indexOf('renderShareButton(article)'),
         'le retour du pied doit suivre les actions de partage',
@@ -312,6 +313,23 @@ test('le lecteur mobile propose un retour en bas d’article, comme en haut', ()
 
     assert.match(css, /\.reader-footer\s*\{[^}]*display:\s*flex[^}]*margin-top/);
     assert.match(css, /@media\s*\(min-width:\s*70\.0625rem\)\s*\{\s*\.reader-back-button-bottom\s*\{\s*display:\s*none/);
+});
+
+test('le pied du lecteur propose les articles précédent et suivant lorsqu’ils existent', () => {
+    const app = read('assets/js/app.js');
+    const articles = read('assets/js/views/articles.js');
+    const reader = read('assets/js/views/reader.js');
+    const css = read('assets/css/app.css');
+
+    assert.match(articles, /getAdjacentArticleIds\(articleIdValue\)/);
+    assert.match(articles, /previousId:\s*index > 0 \? articleIds\[index - 1\] : null/);
+    assert.match(articles, /nextId:\s*index \+ 1 < articleIds\.length \? articleIds\[index \+ 1\] : null/);
+    assert.match(app, /buildRoute\('article', \{ articleId: id \}, \{ from: returnTo \}\)/);
+    assert.match(app, /app\.readerView\.render\(article, articleNavigationOptions\(article\?\.id\)\)/);
+    assert.match(reader, /previousHref !== null[\s\S]*text: 'Précédent'/);
+    assert.match(reader, /nextHref !== null[\s\S]*text: 'Suivant'/);
+    assert.match(reader, /aria-label': 'Navigation entre les articles'/);
+    assert.match(css, /\.reader-next-button\s*\{[^}]*margin-left:\s*auto/);
 });
 
 test('la navigation place Recommandé en premier et Tous après Lus', () => {

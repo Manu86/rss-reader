@@ -687,7 +687,7 @@ function articleTagList(article) {
 }
 
 function renderBackButton(onBack, extraClass = '') {
-    return viewButton('Retour', {
+    return viewButton('Retour à la liste', {
         className: `reader-back-button button${extraClass === '' ? '' : ` ${extraClass}`}`,
         icon: 'left',
         attrs: { 'aria-label': 'Retour à la liste des articles' },
@@ -697,6 +697,37 @@ function renderBackButton(onBack, extraClass = '') {
             }
         },
     });
+}
+
+function localArticleHref(value) {
+    const href = nonEmpty(value) ? textValue(value).trim() : '';
+    return /^\/#\/articles\/[1-9]\d*(?:\?.*)?$/u.test(href) ? href : null;
+}
+
+function renderArticleNavigation(options = {}) {
+    const settings = isObject(options) ? options : {};
+    const previousHref = localArticleHref(settings.previousHref);
+    const nextHref = localArticleHref(settings.nextHref);
+    if (previousHref === null && nextHref === null) {
+        return null;
+    }
+    const children = [];
+    if (previousHref !== null) {
+        children.push(viewEl('a', {
+            className: 'button reader-navigation-button reader-previous-button',
+            attrs: { href: previousHref },
+        }, [viewEl('span', { text: 'Précédent' })]));
+    }
+    if (nextHref !== null) {
+        children.push(viewEl('a', {
+            className: 'button reader-navigation-button reader-next-button',
+            attrs: { href: nextHref },
+        }, [viewEl('span', { text: 'Suivant' })]));
+    }
+    return viewEl('nav', {
+        className: 'reader-article-navigation',
+        attrs: { 'aria-label': 'Navigation entre les articles' },
+    }, children);
 }
 
 function renderFavoriteButton(article, callback) {
@@ -844,7 +875,7 @@ export class ReaderView {
         setHidden(this.placeholder, true);
         setHidden(this.content, false);
         setAttribute(this.pane, 'aria-labelledby', 'reader-article-title');
-        replaceChildren(this.content, this._articleChildren(value));
+        replaceChildren(this.content, this._articleChildren(value, options));
     }
 
     renderLoading(options = {}) {
@@ -934,7 +965,7 @@ export class ReaderView {
         }
     }
 
-    _articleChildren(article) {
+    _articleChildren(article, options = {}) {
         const title = articleTitle(article);
         const date = articleDate(article);
         const author = nonEmpty(article.author) ? textValue(article.author) : null;
@@ -988,9 +1019,12 @@ export class ReaderView {
         bodyChildren.push(articleTagList(article));
         bodyChildren.push(renderExternalLink(article));
         bodyChildren.push(renderShareButton(article));
-        bodyChildren.push(viewEl('div', { className: 'reader-footer' }, [
-            renderBackButton(this.callbacks.onBack, 'reader-back-button-bottom'),
-        ]));
+        const footerChildren = [renderBackButton(this.callbacks.onBack, 'reader-back-button-bottom')];
+        const articleNavigation = renderArticleNavigation(options);
+        if (articleNavigation !== null) {
+            footerChildren.push(articleNavigation);
+        }
+        bodyChildren.push(viewEl('div', { className: 'reader-footer' }, footerChildren));
 
         return [
             viewEl('header', { className: 'reader-header' }, headerChildren),

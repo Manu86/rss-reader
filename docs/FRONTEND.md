@@ -194,10 +194,15 @@ Display:
 The publication date in the reader is followed by the same category badge as
 the article list, including `Sans catégorie` for uncategorized feeds.
 
-When the reader replaces the article list (mobile), the back action to the
-list appears both at the top and at the bottom of the article, using the same
-control and the same accessible name. On large screens the bottom action is
-hidden because the article list stays visible.
+When the reader replaces the article list (mobile), the `Retour à la liste`
+action appears both at the top and at the bottom of the article, using the
+same control and the same accessible name. On large screens the bottom action
+is hidden because the article list stays visible.
+
+The bottom of the reader also exposes `Précédent` and `Suivant` links when the
+corresponding neighbouring article exists in the current loaded list. These
+links preserve the originating view, category, feed or search context. A
+missing neighbour is omitted rather than rendered as a disabled control.
 
 Feed HTML must only be inserted through the sanitization contract from
 `SECURITY.md`.
