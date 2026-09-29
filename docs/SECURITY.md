@@ -139,6 +139,11 @@ Cross-user resource access should generally return `404`.
 Category/feed and feed/article ownership relationships must be
 validated.
 
+The frontend applies the same rule to what it displays: user-scoped panels are
+cleared when the session ends, and a panel is only made visible once its
+content has been replaced, so a new account can never see the previous
+account's rendered data.
+
 ## CSRF
 
 Because authentication uses cookies, protect every state-changing

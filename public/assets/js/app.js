@@ -62,10 +62,23 @@ function showStartup(visible) {
     setVisible(dom.startup, visible);
 }
 
+function resetUtilityPane() {
+    // Le panneau utilitaire porte des données du compte (email, sources,
+    // catégories) : il est vidé à la fin de chaque session, sinon le compte
+    // suivant le retrouverait affiché s'il ouvre les mêmes vues.
+    app.settingsView = null;
+    app.managementView = null;
+    setVisible(dom.utility, false);
+    if (dom.utilityContent) {
+        setChildren(dom.utilityContent, []);
+    }
+}
+
 function showLogin(message = '') {
     app.user = null;
     app.articleListGeneration += 1;
     app.articleListRouteUrl = null;
+    resetUtilityPane();
     setVisible(dom.app, false);
     setVisible(dom.offline, false);
     setVisible(dom.login, true);
@@ -737,10 +750,9 @@ function openManagement() {
 }
 
 async function openSettings() {
-    setVisible(dom.reading, false);
-    setVisible(dom.utility, true);
-    const settings = dataOf(await app.api.getSettings());
-    app.settingsView = new SettingsView(dom.utilityContent, {
+    // Le panneau n'est affiché qu'une fois son contenu remplacé : le rendre
+    // visible avant la réponse exposait les paramètres du compte précédent.
+    const view = new SettingsView(dom.utilityContent, {
         user: app.user,
         onUpdateProfile: async (profile) => {
             const response = await app.api.updateProfile(profile);
@@ -761,7 +773,13 @@ async function openSettings() {
             return response;
         },
     });
-    app.settingsView.render({ user: app.user, feeds: app.feeds, ...settings });
+    app.settingsView = view;
+    view.renderLoading();
+    setVisible(dom.reading, false);
+    setVisible(dom.utility, true);
+    const settings = dataOf(await app.api.getSettings());
+    if (app.settingsView !== view || !app.user) return;
+    view.render({ user: app.user, feeds: app.feeds, ...settings });
 }
 
 async function navigate() {

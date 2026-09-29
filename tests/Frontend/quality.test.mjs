@@ -164,6 +164,26 @@ test('le frontend n’introduit pas de stockage persistant ou d’injection HTML
     assert.match(app, /renderReaderArticle\(article\);\s*app\.articlesView\.updateArticle\(article\);\s*return;/);
 });
 
+test('le panneau paramètres ne montre jamais les données d’un autre compte', () => {
+    // Le panneau n'est visible qu'une fois son contenu remplacé, et la fin de
+    // session le vide : sans cela, le compte suivant qui ouvre les paramètres
+    // voit l'email, le nom et les sources du compte précédent.
+    const app = read('assets/js/app.js');
+    const settings = read('assets/js/views/settings.js');
+
+    assert.match(
+        app,
+        /function resetUtilityPane\(\) \{[\s\S]*?app\.settingsView = null;[\s\S]*?app\.managementView = null;[\s\S]*?setVisible\(dom\.utility, false\);[\s\S]*?setChildren\(dom\.utilityContent, \[\]\)/,
+    );
+    assert.match(app, /function showLogin\([^)]*\) \{[\s\S]*?resetUtilityPane\(\);[\s\S]*?setVisible\(dom\.app, false\);/);
+    assert.match(
+        app,
+        /app\.settingsView = view;\s*view\.renderLoading\(\);\s*setVisible\(dom\.reading, false\);\s*setVisible\(dom\.utility, true\);/,
+    );
+    assert.match(app, /if \(app\.settingsView !== view \|\| !app\.user\) return;/);
+    assert.match(settings, /renderLoading\(\) \{[\s\S]*?spinnerBlock\('Chargement des paramètres…'\)/);
+});
+
 test('les paramètres exposent l’email et la fréquence des recommandations', () => {
     const settings = read('assets/js/views/settings.js');
     const app = read('assets/js/app.js');

@@ -438,6 +438,23 @@ export class SettingsView {
         return this;
     }
 
+    renderLoading() {
+        if (!this.root) {
+            return this;
+        }
+        const view = el('section', {
+            className: 'settings-view',
+            'aria-labelledby': `${this.instanceId}-title`,
+        });
+        view.appendChild(el('header', { className: 'settings-header' }, [
+            el('p', { className: 'eyebrow' }, 'Compte'),
+            el('h1', { id: `${this.instanceId}-title` }, 'Paramètres'),
+        ]));
+        view.appendChild(spinnerBlock('Chargement des paramètres…'));
+        setChildren(this.root, view);
+        return this;
+    }
+
     renderRoot() {
         if (!this.root) {
             return;

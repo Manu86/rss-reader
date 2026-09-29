@@ -361,6 +361,12 @@ Keep server/business rules on the backend.
 
 Avoid a complex global state-management system.
 
+View state lives in the module-level `app` object. Content rendered into a
+shared container (the utility pane, which hosts settings and feed management)
+is user-scoped: it is cleared when the session ends, and the pane is only made
+visible once its content has been replaced. Opening a view must never display
+the previous account's data while its request is in flight.
+
 ## Loading and errors
 
 Provide clear states for:
