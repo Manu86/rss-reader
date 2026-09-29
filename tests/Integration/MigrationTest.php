@@ -38,6 +38,7 @@ final class MigrationTest extends TestCase
                 '010_article_favorited_at',
                 '011_retry_article_image_metadata',
                 '012_login_attempts_address_index',
+                '013_articles_republication_lookup',
             ],
             $this->migrator->migrate(),
         );
@@ -268,11 +269,46 @@ final class MigrationTest extends TestCase
         return $row;
     }
 
+    public function testRepublishedArticleLookupUsesItsOwnIndex(): void
+    {
+        $this->migrator->migrate();
+        self::assertSame(1, $this->integerQuery(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' "
+            . "AND name = 'idx_articles_feed_url_title'"
+        ));
+
+        // La recherche de republication est executee pour chaque article entrant :
+        // sans index dedie, SQLite parcourt tous les articles de l'utilisateur
+        // et trie le resultat, ce qui rend l'import proportionnel au volume
+        // total du compte au lieu du nombre d'articles du flux.
+        $plan = $this->queryPlan(
+            'SELECT id FROM articles WHERE user_id = :user_id AND feed_id = :feed_id '
+            . 'AND url = :url AND title = :title AND deduplication_hash <> :deduplication_hash '
+            . 'AND date(published_at) = date(:published_at) ORDER BY id LIMIT 1'
+        );
+        self::assertStringContainsString('idx_articles_feed_url_title', $plan);
+        self::assertStringNotContainsString('TEMP B-TREE', $plan);
+        self::assertStringNotContainsString('SCAN articles', $plan);
+    }
+
     private function integerQuery(string $sql): int
     {
         $statement = $this->pdo->query($sql);
         self::assertNotFalse($statement);
 
         return (int) $statement->fetchColumn();
+    }
+
+    private function queryPlan(string $sql): string
+    {
+        $statement = $this->pdo->query('EXPLAIN QUERY PLAN ' . $sql);
+        self::assertNotFalse($statement);
+
+        $details = [];
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $details[] = (string) $row['detail'];
+        }
+
+        return implode("\n", $details);
     }
 }

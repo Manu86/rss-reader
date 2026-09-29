@@ -214,7 +214,9 @@ Add indexes supporting common queries, especially:
 -   feeds by user/category;
 -   active feeds;
 -   login attempts by identifier and by address, which are counted separately
-    to apply the two login rate limits.
+    to apply the two login rate limits;
+-   articles by feed/URL/title, which is the republish lookup performed for
+    every incoming article during synchronization.
 
 Avoid speculative indexes without a query need.
 
