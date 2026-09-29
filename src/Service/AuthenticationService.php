@@ -35,7 +35,7 @@ final readonly class AuthenticationService
             $this->users->updatePassword($user->id, password_hash($password, PASSWORD_DEFAULT), gmdate('Y-m-d\TH:i:s\Z'));
         }
 
-        $this->rateLimiter->clear($username, $address);
+        $this->rateLimiter->clear($username);
 
         return $user;
     }

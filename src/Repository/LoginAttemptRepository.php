@@ -10,18 +10,27 @@ final readonly class LoginAttemptRepository
 {
     public function __construct(private PDO $pdo) {}
 
-    public function countSince(string $identifierHash, string $addressHash, string $since): int
+    public function countByIdentifierSince(string $identifierHash, string $since): int
     {
         $statement = $this->pdo->prepare(
             'SELECT COUNT(*) FROM auth_login_attempts '
-            . 'WHERE identifier_hash = :identifier_hash '
-            . 'AND address_hash = :address_hash AND attempted_at >= :since'
+            . 'WHERE identifier_hash = :identifier_hash AND attempted_at >= :since'
         );
         $statement->execute([
             'identifier_hash' => $identifierHash,
-            'address_hash' => $addressHash,
             'since' => $since,
         ]);
+
+        return (int) $statement->fetchColumn();
+    }
+
+    public function countByAddressSince(string $addressHash, string $since): int
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM auth_login_attempts '
+            . 'WHERE address_hash = :address_hash AND attempted_at >= :since'
+        );
+        $statement->execute(['address_hash' => $addressHash, 'since' => $since]);
 
         return (int) $statement->fetchColumn();
     }
@@ -39,16 +48,12 @@ final readonly class LoginAttemptRepository
         ]);
     }
 
-    public function clear(string $identifierHash, string $addressHash): void
+    public function clearByIdentifier(string $identifierHash): void
     {
         $statement = $this->pdo->prepare(
-            'DELETE FROM auth_login_attempts '
-            . 'WHERE identifier_hash = :identifier_hash AND address_hash = :address_hash'
+            'DELETE FROM auth_login_attempts WHERE identifier_hash = :identifier_hash'
         );
-        $statement->execute([
-            'identifier_hash' => $identifierHash,
-            'address_hash' => $addressHash,
-        ]);
+        $statement->execute(['identifier_hash' => $identifierHash]);
     }
 
     public function pruneBefore(string $before): void

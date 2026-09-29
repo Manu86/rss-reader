@@ -35,6 +35,18 @@ Login failures use generic messages.
 Apply simple rate limiting/progressive protection to repeated login
 attempts without exposing account existence.
 
+Failed logins are counted in two independent buckets over a 15 minute
+window: per account, all addresses combined, and per address, all accounts
+combined. Either bucket reaching its threshold refuses the attempt with the
+same error, so the limit cannot be bypassed by rotating addresses, and a
+known account cannot be locked out from a handful of addresses. The account
+threshold (5 failures) is lower than the address threshold (20), because
+several people legitimately share one address (family, company NAT). A
+successful login clears the account bucket, whatever the addresses used;
+it never clears the address bucket, so a single valid account cannot rearm
+the spray protection. Attempts are recorded whether or not the account
+exists, so a threshold never reveals that an account is real.
+
 CLI password reset should use non-echoed interactive input where
 practical.
 

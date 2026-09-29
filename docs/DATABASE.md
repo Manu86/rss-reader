@@ -212,7 +212,9 @@ Add indexes supporting common queries, especially:
 -   unread by user;
 -   favorites by user;
 -   feeds by user/category;
--   active feeds.
+-   active feeds;
+-   login attempts by identifier and by address, which are counted separately
+    to apply the two login rate limits.
 
 Avoid speculative indexes without a query need.
 

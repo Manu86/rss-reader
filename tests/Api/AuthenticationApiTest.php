@@ -200,8 +200,65 @@ final class AuthenticationApiTest extends TestCase
         self::assertSame('TOO_MANY_ATTEMPTS', $this->decode($limited)['error']['code']);
     }
 
-    private function login(ApiKernel $kernel, string $username, string $password): Response
+    public function testLoginRateLimitFollowsTheAccountAcrossAddresses(): void
     {
+        for ($attempt = 0; $attempt < 5; ++$attempt) {
+            $kernel = $this->application->kernel(new ArraySession());
+            self::assertSame(401, $this->login($kernel, 'alice', 'wrong password', '198.51.100.' . $attempt)->status);
+        }
+
+        $kernel = $this->application->kernel(new ArraySession());
+        $limited = $this->login($kernel, 'alice', 'correct horse battery staple', '198.51.100.99');
+        self::assertSame(429, $limited->status);
+        self::assertSame('TOO_MANY_ATTEMPTS', $this->decode($limited)['error']['code']);
+    }
+
+    public function testLoginRateLimitFollowsTheAddressAcrossAccounts(): void
+    {
+        for ($attempt = 0; $attempt < 19; ++$attempt) {
+            $kernel = $this->application->kernel(new ArraySession());
+            $status = $this->login($kernel, 'absent-' . $attempt, 'wrong password')->status;
+            self::assertContains($status, [401], 'Chaque compte reste sous sa propre limite');
+        }
+
+        $kernel = $this->application->kernel(new ArraySession());
+        $allowed = $this->login($kernel, 'alice', 'correct horse battery staple');
+        self::assertSame(200, $allowed->status, 'Une adresse sous sa limite peut se connecter');
+
+        $kernel = $this->application->kernel(new ArraySession());
+        $failure = $this->login($kernel, 'bob', 'wrong password');
+        self::assertSame(401, $failure->status);
+
+        $kernel = $this->application->kernel(new ArraySession());
+        $limited = $this->login($kernel, 'alice', 'correct horse battery staple');
+        self::assertSame(429, $limited->status);
+    }
+
+    public function testSuccessfulLoginClearsTheAccountAttemptsOnly(): void
+    {
+        for ($attempt = 0; $attempt < 4; ++$attempt) {
+            $kernel = $this->application->kernel(new ArraySession());
+            self::assertSame(401, $this->login($kernel, 'alice', 'wrong password')->status);
+        }
+
+        $kernel = $this->application->kernel(new ArraySession());
+        self::assertSame(200, $this->login($kernel, 'alice', 'correct horse battery staple')->status);
+
+        for ($attempt = 0; $attempt < 4; ++$attempt) {
+            $kernel = $this->application->kernel(new ArraySession());
+            self::assertSame(401, $this->login($kernel, 'alice', 'wrong password')->status);
+        }
+
+        $kernel = $this->application->kernel(new ArraySession());
+        self::assertSame(200, $this->login($kernel, 'alice', 'correct horse battery staple')->status);
+    }
+
+    private function login(
+        ApiKernel $kernel,
+        string $username,
+        string $password,
+        string $address = '192.0.2.1',
+    ): Response {
         $csrfResponse = $kernel->handle(new Request('GET', '/api/auth/csrf'));
         $csrf = $this->decode($csrfResponse)['data']['csrf_token'];
         self::assertIsString($csrf);
@@ -214,7 +271,7 @@ final class AuthenticationApiTest extends TestCase
                 'x-csrf-token' => $csrf,
             ],
             json_encode(['username' => $username, 'password' => $password], JSON_THROW_ON_ERROR),
-            '192.0.2.1',
+            $address,
         ));
     }
 

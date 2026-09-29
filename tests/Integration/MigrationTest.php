@@ -37,6 +37,7 @@ final class MigrationTest extends TestCase
                 '009_merge_republished_articles',
                 '010_article_favorited_at',
                 '011_retry_article_image_metadata',
+                '012_login_attempts_address_index',
             ],
             $this->migrator->migrate(),
         );
