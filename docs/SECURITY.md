@@ -38,6 +38,10 @@ attempts without exposing account existence.
 CLI password reset should use non-echoed interactive input where
 practical.
 
+A CLI password reset is an explicit re-secure, exactly like a password change
+from the interface: it revokes every remembered device of the account, so a
+stolen cookie cannot outlive the reset.
+
 ## Sessions
 
 Session cookies:

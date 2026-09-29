@@ -74,7 +74,12 @@ final readonly class TestApplication
         (new Migrator($this->pdo, $this->migrationDirectory))->migrate();
         $clock = new FrozenClock(new DateTimeImmutable('2026-09-24T12:00:00Z'));
         $this->users = new UserRepository($this->pdo);
-        $this->userService = new UserService($this->users, new PasswordPolicy(), $clock);
+        $this->userService = new UserService(
+            $this->users,
+            new RememberTokenRepository($this->pdo),
+            new PasswordPolicy(),
+            $clock,
+        );
         $this->mediaStorage = new MemoryMediaStorage();
     }
 

@@ -9,6 +9,7 @@ use App\Exception\AuthenticationException;
 use App\Exception\ValidationException;
 use App\Model\User;
 use App\Model\UserSettings;
+use App\Repository\RememberTokenRepository;
 use App\Repository\UserRepository;
 use App\Security\PasswordPolicy;
 use PDOException;
@@ -17,6 +18,7 @@ final readonly class UserService
 {
     public function __construct(
         private UserRepository $users,
+        private RememberTokenRepository $rememberTokens,
         private PasswordPolicy $passwordPolicy,
         private Clock $clock,
     ) {}
@@ -100,6 +102,9 @@ final readonly class UserService
             password_hash($password, PASSWORD_DEFAULT),
             $this->now(),
         );
+        // Un mot de passe réinitialisé est un re-sécurisage explicite : les
+        // appareils qui s'en souvenaient doivent s'authentifier de nouveau.
+        $this->rememberTokens->deleteAllForUser($user->id);
 
         return true;
     }

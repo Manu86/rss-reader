@@ -125,7 +125,7 @@ final class ApplicationFactory
             $migrator,
             new InstallationService($config, $migrator),
             $users,
-            new UserService($users, new PasswordPolicy(), $clock),
+            new UserService($users, new RememberTokenRepository($pdo), new PasswordPolicy(), $clock),
             new PasswordReader(),
             new AutomaticFeedRefreshService($feeds, $synchronization),
             new RecommendationDigestService(
@@ -179,7 +179,7 @@ final class ApplicationFactory
         );
         $authentication = new AuthenticationService($users, $rateLimiter);
         $currentUser = new CurrentUser($session, $authentication);
-        $userService = new UserService($users, new PasswordPolicy(), $clock);
+        $userService = new UserService($users, new RememberTokenRepository($pdo), new PasswordPolicy(), $clock);
         $rememberTokens = new RememberTokenService(
             new RememberTokenRepository($pdo),
             $authentication,

@@ -60,15 +60,29 @@ final class ConsoleApplicationTest extends TestCase
         self::assertStringContainsString("alice\tdésactivé", $this->runConsole(['user:list'])['stdout']);
         self::assertSame(0, $this->runConsole(['user:enable', 'alice'])['exit_code']);
 
+        $pdo = ConnectionFactory::create($this->databasePath());
+        $pdo->exec("INSERT INTO user_remember_tokens "
+            . "(user_id, selector, token_hash, expires_at, created_at) "
+            . "SELECT id, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'hash', '2030-01-01T00:00:00Z', "
+            . "'2026-01-01T00:00:00Z' FROM users WHERE username = 'alice'");
+        $pdo->exec("INSERT INTO user_remember_tokens "
+            . "(user_id, selector, token_hash, expires_at, created_at) "
+            . "SELECT id, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'hash', '2030-01-01T00:00:00Z', "
+            . "'2026-01-01T00:00:00Z' FROM users WHERE username = 'administrateur'");
+
         $passwordChange = $this->runConsole(
             ['user:password', 'alice', '--password-stdin'],
             "replacement secure password\n",
         );
         self::assertSame(0, $passwordChange['exit_code'], $passwordChange['stderr']);
-        $pdo = ConnectionFactory::create($this->databasePath());
         $statement = $pdo->query("SELECT password_hash FROM users WHERE username = 'alice'");
         self::assertNotFalse($statement);
         self::assertTrue(password_verify('replacement secure password', (string) $statement->fetchColumn()));
+        // Réinitialiser le mot de passe re-sécurise le compte : les appareils
+        // qui s'en souvenaient pour cet utilisateur ne sont plus valides.
+        $tokens = $pdo->query('SELECT selector FROM user_remember_tokens');
+        self::assertNotFalse($tokens);
+        self::assertSame(['bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'], $tokens->fetchAll(PDO::FETCH_COLUMN));
 
         $migration = $this->runConsole(['db:migrate']);
         self::assertSame(0, $migration['exit_code'], $migration['stderr']);

@@ -7,6 +7,7 @@ namespace Tests\Integration;
 use App\Database\ConnectionFactory;
 use App\Database\Migrator;
 use App\Exception\ValidationException;
+use App\Repository\RememberTokenRepository;
 use App\Repository\UserRepository;
 use App\Security\PasswordPolicy;
 use App\Service\UserService;
@@ -26,6 +27,7 @@ final class UserServiceTest extends TestCase
         $this->repository = new UserRepository($pdo);
         $this->service = new UserService(
             $this->repository,
+            new RememberTokenRepository($pdo),
             new PasswordPolicy(),
             new FrozenClock(new DateTimeImmutable('2026-09-24T12:00:00Z')),
         );
