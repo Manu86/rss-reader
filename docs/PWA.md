@@ -43,6 +43,17 @@ Minimum concept:
 Provide suitable 192×192 and 512×512 icons, including maskable variants
 where appropriate.
 
+Raster install icons are rendered from `assets/icons/icon.svg`. They fill the
+whole tile with the brand color, without transparency and without rounded
+corners, and keep the glyph inside the 80 % safe circle left free by the
+platform mask: the launch screen centers the icon on `background_color`, so a
+lighter frame around the blue square would read as an extra element on the
+page. iOS neither crops the home screen icon nor accepts transparency, so the
+shell points `apple-touch-icon` at the same full-bleed artwork. The
+`icon.svg` used for the browser tab keeps the rounded shape, which stays
+legible at small sizes. Icon URLs are unversioned: bump the service worker
+cache name whenever the raster icons change.
+
 Production requires HTTPS.
 
 ## System bars and screen coverage
@@ -74,8 +85,9 @@ Consequences to keep in mind:
     and the light page background, and `applyTheme` updates it with the page
     background (`--soft`) of the active theme, on startup and on every theme
     change;
--   the manifest `background_color` matches the light page background and is
-    only used for the installation splash screen.
+-   the manifest `background_color` matches the install icon background and is
+    only used for the installation splash screen, so the launch screen shows
+    the icon alone instead of a lighter frame around it.
 
 ## Service worker
 

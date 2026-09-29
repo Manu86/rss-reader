@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rss-reader-static-v84';
+const CACHE_NAME = 'rss-reader-static-v86';
 const STATIC_ASSETS = [
     '/',
     '/manifest.webmanifest',
@@ -19,6 +19,7 @@ const STATIC_ASSETS = [
     '/assets/icons/icon.svg',
     '/assets/icons/icon-192.svg',
     '/assets/icons/icon-512.svg',
+    '/assets/icons/apple-touch-icon.png',
     '/assets/icons/icon-192-v2.png',
     '/assets/icons/icon-192-maskable-v2.png',
     '/assets/icons/icon-512-v2.png',

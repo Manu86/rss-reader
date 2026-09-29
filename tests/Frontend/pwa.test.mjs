@@ -2,6 +2,7 @@ import assert from 'assert';
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { inflateSync } from 'zlib';
 import { test } from './harness.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -9,6 +10,104 @@ const publicRoot = join(root, 'public');
 
 function readPublic(path) {
     return readFileSync(join(publicRoot, path), 'utf8');
+}
+
+function corners(image) {
+    const last = image.width - 1;
+
+    return [[0, 0], [last, 0], [0, last], [last, last]];
+}
+
+function glyphRadius(image) {
+    let radius = 0;
+    for (let y = 0; y < image.height; y++) {
+        for (let x = 0; x < image.width; x++) {
+            const { r, g, b } = image.pixel(x, y);
+            if (r <= 200 || g <= 200 || b <= 200) {
+                continue;
+            }
+            radius = Math.max(
+                radius,
+                Math.hypot(x + 0.5 - image.width / 2, y + 0.5 - image.height / 2),
+            );
+        }
+    }
+
+    return radius;
+}
+
+function decodePng(buffer) {
+    assert.deepStrictEqual(
+        Array.from(buffer.subarray(0, 8)),
+        [137, 80, 78, 71, 13, 10, 26, 10],
+        'signature PNG invalide',
+    );
+
+    const chunks = [];
+    let header = null;
+    let offset = 8;
+    while (offset < buffer.length) {
+        const length = buffer.readUInt32BE(offset);
+        const type = buffer.toString('ascii', offset + 4, offset + 8);
+        if (type === 'IHDR') {
+            header = {
+                width: buffer.readUInt32BE(offset + 8),
+                height: buffer.readUInt32BE(offset + 12),
+                depth: buffer[offset + 16],
+                colorType: buffer[offset + 17],
+            };
+        } else if (type === 'IDAT') {
+            chunks.push(buffer.subarray(offset + 8, offset + 8 + length));
+        } else if (type === 'IEND') {
+            break;
+        }
+        offset += 12 + length;
+    }
+
+    assert.ok(header, 'en-tête PNG absent');
+    assert.strictEqual(header.depth, 8, 'profondeur PNG non gérée');
+    const channels = { 0: 1, 2: 3, 4: 2, 6: 4 }[header.colorType];
+    assert.ok(channels, `type de couleur PNG non géré : ${header.colorType}`);
+
+    const raw = inflateSync(Buffer.concat(chunks));
+    const stride = header.width * channels;
+    const pixels = Buffer.alloc(stride * header.height);
+    let previous = Buffer.alloc(stride);
+    for (let y = 0; y < header.height; y++) {
+        const filter = raw[y * (stride + 1)];
+        const line = raw.subarray(y * (stride + 1) + 1, y * (stride + 1) + 1 + stride);
+        const current = pixels.subarray(y * stride, (y + 1) * stride);
+        for (let i = 0; i < stride; i++) {
+            const left = i >= channels ? current[i - channels] : 0;
+            const up = previous[i];
+            const upLeft = i >= channels ? previous[i - channels] : 0;
+            const estimate = left + up - upLeft;
+            const distance = [
+                Math.abs(estimate - left),
+                Math.abs(estimate - up),
+                Math.abs(estimate - upLeft),
+            ];
+            const prediction = [left, up, upLeft][distance.indexOf(Math.min(...distance))];
+            const value = line[i]
+                + [0, left, up, Math.floor((left + up) / 2), prediction][filter];
+            current[i] = value & 0xFF;
+        }
+        previous = current;
+    }
+
+    return {
+        width: header.width,
+        height: header.height,
+        pixel(x, y) {
+            const start = y * stride + x * channels;
+            return {
+                r: pixels[start],
+                g: pixels[start + (channels > 1 ? 1 : 0)],
+                b: pixels[start + (channels > 2 ? 2 : 0)],
+                a: channels === 4 ? pixels[start + 3] : channels === 2 ? pixels[start + 1] : 255,
+            };
+        },
+    };
 }
 
 test('le manifest PWA déclare des icônes PNG installables', () => {
@@ -25,6 +124,37 @@ test('le manifest PWA déclare des icônes PNG installables', () => {
         assert.ok(icons.some((icon) => icon.type === 'image/png' && icon.purpose === 'any'));
         assert.ok(icons.some((icon) => icon.type === 'image/png' && icon.purpose === 'maskable'));
         icons.forEach((icon) => assert.ok(existsSync(join(publicRoot, icon.src.slice(1)))));
+    }
+});
+
+test('les icônes d’installation occupent toute la tuile', () => {
+    // Le système affiche ces icônes en grand (écran de démarrage, lanceur) et
+    // centre l’icône sur background_color : un cadre clair ou transparent
+    // autour du carré bleu se lit alors comme un élément supplémentaire. Les
+    // icônes d’installation sont donc pleines, et le glyphe reste dans la zone
+    // sûre de 80 % laissée libre par le masque du système.
+    const manifest = JSON.parse(readPublic('manifest.webmanifest'));
+    assert.match(manifest.background_color, /^#[0-9a-f]{6}$/i);
+
+    for (const icon of manifest.icons) {
+        const image = decodePng(readFileSync(join(publicRoot, icon.src.slice(1))));
+        const last = image.width - 1;
+        const samples = [...corners(image), [image.width / 2, 0], [image.width / 2, last], [0, image.height / 2], [last, image.height / 2]];
+        for (const [x, y] of samples) {
+            const { r, g, b, a } = image.pixel(Math.floor(x), Math.floor(y));
+            assert.strictEqual(a, 255, `bord transparent dans ${icon.src} en (${x},${y})`);
+            assert.ok(b > r && b > g, `bord non bleu dans ${icon.src} en (${x},${y})`);
+        }
+        assert.ok(glyphRadius(image) <= image.width * 0.4, `glyphe hors zone sûre : ${icon.src}`);
+    }
+
+    const apple = readPublic('index.html').match(/<link rel="apple-touch-icon" href="([^"]+)"/);
+    assert.ok(apple, 'le shell HTML ne déclare pas d’icône apple-touch');
+    const icon = decodePng(readFileSync(join(publicRoot, apple[1].slice(1))));
+    for (const [x, y] of corners(icon)) {
+        const { r, g, b, a } = icon.pixel(x, y);
+        assert.strictEqual(a, 255, `icône apple-touch transparente en (${x},${y})`);
+        assert.ok(b > r && b > g, `icône apple-touch sans fond bleu en (${x},${y})`);
     }
 });
 
