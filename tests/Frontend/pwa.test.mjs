@@ -302,6 +302,34 @@ test('les barres système suivent le fond de page du thème actif', () => {
     assert.match(app, /dom\.themeColor = byId\('theme-color'\)/);
 });
 
+test('le champ de recherche se distingue du bandeau en mode sombre', () => {
+    // En mode sombre, l'en-tête et la page partagent la couleur --soft : un
+    // champ de recherche qui l'utilise aussi se confond avec le bandeau et
+    // devient invisible, alors qu'en mode clair il ressort sur le bandeau
+    // blanc. Le repos doit donc utiliser la couleur des panneaux, et la
+    // bordure ne doit pas rester transparente.
+    const css = readPublic('assets/css/app.css');
+    const rest = css.match(/\[data-theme="dark"\] \.global-search input \{([^}]*)\}/);
+    assert.ok(rest, 'le mode sombre doit definir le fond du champ de recherche');
+    assert.match(rest[1], /background:\s*var\(--surface\)/);
+    assert.doesNotMatch(rest[1], /background:\s*var\(--soft\)/);
+    assert.doesNotMatch(rest[1], /border-color:\s*transparent/);
+    // Le focus doit rester identifiable par rapport au repos.
+    const focus = css.match(/\[data-theme="dark"\] \.global-search input:focus \{([^}]*)\}/);
+    assert.ok(focus);
+    assert.notEqual(focus[1].match(/background:[^;]+/)?.[0], rest[1].match(/background:[^;]+/)?.[0]);
+});
+
+test('la version de la feuille de style concorde entre le shell et le pré-cache', () => {
+    // Sans cette concordance, une correction du style reste invisible : le
+    // navigateur et le pré-cache continuent de servir l'ancienne URL.
+    const shell = readPublic('index.html').match(/\/assets\/css\/app\.css\?v=(\d+)/);
+    const worker = readPublic('service-worker.js').match(/\/assets\/css\/app\.css\?v=(\d+)/);
+    assert.ok(shell, 'le shell doit versionner la feuille de style');
+    assert.ok(worker, 'le service worker doit pré-cacher la feuille de style');
+    assert.equal(shell[1], worker[1], 'le shell et le pré-cache divergent sur la version du style');
+});
+
 test('le plein écran réserve les zones sûres de l’écran', () => {
     // En plein écran le contenu passe sous l’encoche et la barre de gestes :
     // sans ces marges, l’en-tête et la déconnexion seraient illisibles.

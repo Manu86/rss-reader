@@ -1,8 +1,8 @@
-const CACHE_NAME = 'rss-reader-static-v87';
+const CACHE_NAME = 'rss-reader-static-v88';
 const STATIC_ASSETS = [
     '/',
     '/manifest.webmanifest',
-    '/assets/css/app.css?v=65',
+    '/assets/css/app.css?v=66',
     '/assets/js/app.js?v=49',
     '/assets/js/api/client.js?v=3',
     '/assets/js/router.js?v=26',

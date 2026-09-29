@@ -382,7 +382,11 @@ a.reader-source-link:hover .reader-source-name { color: var(--accent); }
 [data-theme="dark"] .button-danger { color: #fff; background: #b42318; border-color: #b42318; }
 
 [data-theme="dark"] .app-header { background: rgb(13 21 29 / 95%); }
-[data-theme="dark"] .global-search input { background: var(--soft); }
+/* En mode sombre, l'en-tete et la page partagent la couleur --soft : un champ
+   de recherche qui l'utilise aussi se confond avec le bandeau et disparait,
+   alors qu'en mode clair il se distingue du bandeau blanc. Le fond --surface
+   et la bordure --line reprennent le traitement des autres champs sombres. */
+[data-theme="dark"] .global-search input { background: var(--surface); border-color: var(--line); }
 [data-theme="dark"] .global-search input:focus { background: #1d2a37; }
 [data-theme="dark"] .sidebar, [data-theme="dark"] .article-list-pane { background: var(--surface); }
 [data-theme="dark"] .reader-pane { background: var(--surface); }
