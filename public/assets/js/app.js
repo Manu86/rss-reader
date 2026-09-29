@@ -25,6 +25,7 @@ const app = {
     settingsView: null,
     loadingRoute: false,
     articleListGeneration: 0,
+    readerGeneration: 0,
     articleListRouteUrl: null,
     openCategoryIds: new Set(),
 };
@@ -62,6 +63,12 @@ function showStartup(visible) {
     setVisible(dom.startup, visible);
 }
 
+function invalidateReader() {
+    // Toute réponse d'article encore en vol est devenue obsolète : le lecteur
+    // n'est plus la vue affichée, il ne doit plus peindre son contenu.
+    app.readerGeneration += 1;
+}
+
 function resetUtilityPane() {
     // Le panneau utilitaire porte des données du compte (email, sources,
     // catégories) : il est vidé à la fin de chaque session, sinon le compte
@@ -77,6 +84,7 @@ function resetUtilityPane() {
 function showLogin(message = '') {
     app.user = null;
     app.articleListGeneration += 1;
+    invalidateReader();
     app.articleListRouteUrl = null;
     resetUtilityPane();
     setVisible(dom.app, false);
@@ -599,20 +607,29 @@ function returnToArticleList() {
 }
 
 async function loadArticle(id, markRead = false) {
+    // Une réponse d'article arrivée après une autre navigation (ou après la fin
+    // de session) est ignorée : elle repeindrait le lecteur avec un article
+    // qui n'est plus celui demandé, potentiellement celui d'un autre compte.
+    const generation = app.readerGeneration + 1;
+    app.readerGeneration = generation;
     app.readerView.renderLoading();
     try {
         const response = await app.api.getArticle(id);
+        if (generation !== app.readerGeneration) return;
         let article = dataOf(response);
         if (markRead && article.is_read !== true) {
             const updated = await app.api.updateArticle(id, { is_read: true });
+            if (generation !== app.readerGeneration) return;
             article = dataOf(updated);
             app.articleListRouteUrl = null;
             await loadShell();
+            if (generation !== app.readerGeneration) return;
         }
         renderReaderArticle(article);
         app.articlesView.updateArticle(article);
         revealArticleFeedGroup(articleFeedOf(article));
     } catch (error) {
+        if (generation !== app.readerGeneration) return;
         app.readerView.renderError(error);
     }
 }
@@ -662,6 +679,7 @@ async function renderReading(route, options = {}) {
         await loadArticle(route.params.id, options.markArticleRead === true);
         return;
     }
+    invalidateReader();
     app.readerView.renderPlaceholder();
     if (app.articleListRouteUrl === routeUrl(route) && route.name !== 'recommendations') {
         app.articlesView.setActiveArticle(null);
@@ -733,6 +751,7 @@ async function refreshCurrentView() {
 }
 
 function openManagement() {
+    invalidateReader();
     setVisible(dom.reading, false);
     setVisible(dom.utility, true);
     app.managementView = new ManagementView(dom.utilityContent, {
@@ -750,6 +769,7 @@ function openManagement() {
 }
 
 async function openSettings() {
+    invalidateReader();
     // Le panneau n'est affiché qu'une fois son contenu remplacé : le rendre
     // visible avant la réponse exposait les paramètres du compte précédent.
     const view = new SettingsView(dom.utilityContent, {

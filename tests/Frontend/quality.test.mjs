@@ -164,6 +164,25 @@ test('le frontend n’introduit pas de stockage persistant ou d’injection HTML
     assert.match(app, /renderReaderArticle\(article\);\s*app\.articlesView\.updateArticle\(article\);\s*return;/);
 });
 
+test('le lecteur ignore les réponses d’articles devenues obsolètes', () => {
+    // Sans garde de génération, une réponse lente repeint le lecteur après une
+    // autre navigation, et peut afficher l'article d'un compte précédent.
+    const app = read('assets/js/app.js');
+    const loadArticle = app.match(/async function loadArticle\([^)]*\) \{[\s\S]*?\n\}/);
+
+    assert.ok(loadArticle, 'loadArticle introuvable');
+    assert.match(app, /readerGeneration: 0,/);
+    assert.match(loadArticle[0], /const generation = app\.readerGeneration \+ 1;\s*app\.readerGeneration = generation;/);
+    const guards = loadArticle[0].match(/if \(generation !== app\.readerGeneration\) return;/g) || [];
+    assert.equal(guards.length, 4, 'chaque await de loadArticle doit être suivi d’un contrôle de génération');
+    assert.match(loadArticle[0], /renderReaderArticle\(article\);[\s\S]*?app\.readerView\.renderError\(error\);/);
+    assert.match(app, /function invalidateReader\(\) \{[\s\S]*?app\.readerGeneration \+= 1;/);
+    assert.match(app, /function showLogin\([^)]*\) \{[\s\S]*?invalidateReader\(\);/);
+    assert.match(app, /invalidateReader\(\);\s*app\.readerView\.renderPlaceholder\(\);/);
+    assert.match(app, /function openManagement\(\) \{\s*invalidateReader\(\);/);
+    assert.match(app, /async function openSettings\(\) \{\s*invalidateReader\(\);/);
+});
+
 test('le panneau paramètres ne montre jamais les données d’un autre compte', () => {
     // Le panneau n'est visible qu'une fois son contenu remplacé, et la fin de
     // session le vide : sans cela, le compte suivant qui ouvre les paramètres

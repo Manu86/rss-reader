@@ -382,6 +382,13 @@ Provide clear states for:
 
 Do not replace the whole interface with raw API error text.
 
+Any request that renders user-visible content is protected by a generation
+counter: a response that is no longer the current one is discarded instead of
+being painted. A view invalidates the in-flight requests it supersedes, both
+when it requests its own content and when it takes the screen from another
+view: leaving an article for the list, opening the settings or feed management
+panel, and ending the session all invalidate pending article responses.
+
 When an API error code has a known user-facing meaning, show that specific
 text rather than the generic status-based message. In particular, duplicate
 subscription and duplicate category codes must state that the entry already
