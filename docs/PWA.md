@@ -116,6 +116,18 @@ other requests     → network
 
 Use versioned cache names such as `rss-reader-static-v1`.
 
+A versioned cache name is the invalidation mechanism for static assets: bump
+it whenever a precached file changes, and bump the `?v=` query of a changed
+module in every file that imports it and in the precache list, so the
+precached URL always matches what the browser actually requests.
+
+Every module of the import graph must be precached under the exact string
+used to import it, including modules referenced through relative specifiers.
+A module must be imported through a single specifier across the whole
+application: importing the same file once with `?v=3` and once without makes
+the browser instantiate it twice, and the second copy does not share the first
+copy's state.
+
 Only cache known safe static resources. Do not dynamically cache
 arbitrary successful same-origin responses.
 
@@ -197,6 +209,7 @@ Verify at least:
 -   valid manifest/icons;
 -   service-worker registration;
 -   static shell offline;
+-   module import graph and precache list matching exactly;
 -   `/api/*` remains network-only;
 -   no authenticated API data in Cache Storage;
 -   old cache cleanup;

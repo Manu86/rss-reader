@@ -1,4 +1,4 @@
-import { buildRoute } from '../router.js';
+import { buildRoute } from '../router.js?v=26';
 import { errorMessage as domErrorMessage } from '../utils/dom.js';
 import { formatDateTime, formatFeedStatus, formatNumber } from '../utils/format.js';
 import {

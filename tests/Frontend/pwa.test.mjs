@@ -1,6 +1,6 @@
 import assert from 'assert';
 import { existsSync, readFileSync, readdirSync } from 'fs';
-import { dirname, join } from 'path';
+import { dirname, join, posix } from 'path';
 import { fileURLToPath } from 'url';
 import { inflateSync } from 'zlib';
 import { test } from './harness.mjs';
@@ -10,6 +10,21 @@ const publicRoot = join(root, 'public');
 
 function readPublic(path) {
     return readFileSync(join(publicRoot, path), 'utf8');
+}
+
+function collectJsFiles(directory, prefix = '') {
+    // `readdirSync(..., { recursive: true })` est ignoré sur Node 18.15.
+    const files = [];
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+            files.push(...collectJsFiles(join(directory, entry.name), relative));
+        } else if (entry.name.endsWith('.js')) {
+            files.push(relative);
+        }
+    }
+
+    return files.sort();
 }
 
 function corners(image) {
@@ -175,9 +190,7 @@ test('le service worker ne met jamais les routes API en cache', () => {
     const referenced = Array.from(
         [
             readPublic('index.html'),
-            ...readdirSync(join(publicRoot, 'assets/js'), { recursive: true })
-                .filter((entry) => entry.endsWith('.js'))
-                .map((entry) => readPublic(join('assets/js', entry))),
+            ...collectJsFiles(join(publicRoot, 'assets/js')).map((entry) => readPublic(join('assets/js', entry))),
         ]
             .join('\n')
             .matchAll(/'?(?:\/assets\/[\w./-]+\.js(?:\?v=\d+)?)'?/g),
@@ -193,6 +206,51 @@ test('le service worker ne met jamais les routes API en cache', () => {
         }
         assert.ok(precache.includes(url), `non pré-caché par le service worker : ${url}`);
     }
+});
+
+test('le graphe de modules et le pré-cache du service worker concordent', () => {
+    // Les imports relatifs échappent au scan des URL absolues : sans cette
+    // vérification, un module importé sans sa version était absent du
+    // pré-cache et cassait le chargement hors ligne.
+    const serviceWorker = readPublic('service-worker.js');
+    const precache = Array.from(
+        serviceWorker.matchAll(/'(\/assets\/[^']+)'/g),
+        (match) => match[1],
+    );
+    const moduleFiles = collectJsFiles(join(publicRoot, 'assets/js'));
+    const specifiers = new Map();
+
+    for (const entry of moduleFiles) {
+        const file = join('assets/js', entry);
+        const source = readPublic(file);
+        for (const match of source.matchAll(/(?:from|import)\s*\(?\s*'([^']+\.js(?:\?v=\d+)?)'/g)) {
+            const [target, query] = match[1].split('?');
+            const resolved = `${posix.normalize(posix.join(posix.dirname(`/${file}`), target))}${query ? `?${query}` : ''}`;
+            assert.ok(precache.includes(resolved), `non pré-caché par le service worker : ${resolved} (importé par ${file})`);
+            if (!specifiers.has(target)) {
+                specifiers.set(target, new Map());
+            }
+            const byModule = specifiers.get(target);
+            byModule.set(file, match[1]);
+        }
+    }
+
+    // Un même module importé avec deux chaînes différentes est instancié deux
+    // fois par le navigateur : son état local n'est alors pas partagé.
+    for (const [target, byModule] of specifiers) {
+        const distinct = new Set(byModule.values());
+        assert.equal(
+            distinct.size,
+            1,
+            `${target} est importé avec ${distinct.size} chaînes différentes : ${[...distinct].join(', ')}`,
+        );
+    }
+
+    const shell = readPublic('index.html');
+    for (const match of shell.matchAll(/src="(\/assets\/js\/[^"]+\.js(?:\?v=\d+)?)"/g)) {
+        assert.ok(precache.includes(match[1]), `non pré-caché par le service worker : ${match[1]}`);
+    }
+    assert.match(shell, /CACHE_NAME|app\.js\?v=\d+/);
 });
 
 test('le shell HTML expose les points d’intégration PWA et accessibilité', () => {

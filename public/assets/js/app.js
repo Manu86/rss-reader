@@ -1,8 +1,8 @@
 import { ApiError, NetworkError, createApiClient } from './api/client.js?v=3';
 import { closeDialog } from './components/dialog.js';
 import { showToast } from './components/feedback.js';
-import { ManagementView } from './views/management.js?v=3';
-import { SettingsView } from './views/settings.js?v=7';
+import { ManagementView } from './views/management.js?v=4';
+import { SettingsView } from './views/settings.js?v=8';
 import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js';
 import { createLoginView } from './views/login.js';
 import { ArticlesView } from './views/articles.js?v=28';

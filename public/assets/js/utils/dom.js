@@ -1,4 +1,4 @@
-import { ApiError, NetworkError } from '../api/client.js';
+import { ApiError, NetworkError } from '../api/client.js?v=3';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 const BLOCKED_PROPERTIES = new Set(['inner' + 'HTML', 'outer' + 'HTML']);
