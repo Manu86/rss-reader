@@ -19,6 +19,8 @@ use Throwable;
 
 final readonly class FeedSynchronizationService implements FeedRefresher
 {
+    private const MAX_ARTICLE_PAGES_PER_SYNCHRONIZATION = 5;
+
     public function __construct(
         private FeedRepository $feeds,
         private ArticleRepository $articles,
@@ -26,6 +28,7 @@ final readonly class FeedSynchronizationService implements FeedRefresher
         private TransactionManager $transactions,
         private Clock $clock,
         private RemoteMediaService $media,
+        private ArticlePageService $articlePages,
         private FeedRefreshLock $locks,
     ) {}
 
@@ -175,21 +178,53 @@ final readonly class FeedSynchronizationService implements FeedRefresher
         }
 
         foreach ($inserted->mediaCandidates as $candidate) {
-            if ($candidate['metadata_fallback']) {
-                $this->articles->markImageMetadataChecked($candidate['id'], $feed->userId, $now);
-            }
             try {
-                $key = $this->media->downloadArticleImage(
-                    $feed->userId,
-                    $candidate['image_url'],
-                    $candidate['article_url'],
-                );
+                if ($candidate['image_url'] === null) {
+                    continue;
+                }
+                $key = $this->media->download($feed->userId, $candidate['image_url']);
                 if (!$this->articles->setImagePath($candidate['id'], $feed->userId, $key, $now)) {
                     $this->media->discard($feed->userId, $key);
                 }
             } catch (Throwable) {
                 error_log(sprintf(
                     'Article image import failed [user:%d feed:%d article:%d]',
+                    $feed->userId,
+                    $feed->id,
+                    $candidate['id'],
+                ));
+            }
+        }
+
+        foreach (array_slice($inserted->pageCandidates, 0, self::MAX_ARTICLE_PAGES_PER_SYNCHRONIZATION) as $candidate) {
+            try {
+                $page = $this->articlePages->fetch($candidate['article_url']);
+                if ($candidate['content_fallback']) {
+                    if ($page->content === null) {
+                        $this->articles->markPageContentChecked($candidate['id'], $feed->userId, $now);
+                    } else {
+                        $this->articles->setPageContent($candidate['id'], $feed->userId, $page->content, $now);
+                    }
+                }
+                if ($candidate['image_fallback']) {
+                    $this->articles->markImageMetadataChecked($candidate['id'], $feed->userId, $now);
+                    try {
+                        $key = $this->media->downloadFirst($feed->userId, $page->imageCandidates);
+                        if (!$this->articles->setImagePath($candidate['id'], $feed->userId, $key, $now)) {
+                            $this->media->discard($feed->userId, $key);
+                        }
+                    } catch (Throwable) {
+                        error_log(sprintf(
+                            'Article image import failed [user:%d feed:%d article:%d]',
+                            $feed->userId,
+                            $feed->id,
+                            $candidate['id'],
+                        ));
+                    }
+                }
+            } catch (Throwable) {
+                error_log(sprintf(
+                    'Article page import failed [user:%d feed:%d article:%d]',
                     $feed->userId,
                     $feed->id,
                     $candidate['id'],

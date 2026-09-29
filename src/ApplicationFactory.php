@@ -42,6 +42,10 @@ use App\Security\LoginRateLimiter;
 use App\Security\NativeSession;
 use App\Security\PasswordPolicy;
 use App\Security\RemoteActionRateLimiter;
+use App\Service\ArticleContentEnrichmentService;
+use App\Service\ArticleImageMetadataParser;
+use App\Service\ArticlePageContentParser;
+use App\Service\ArticlePageService;
 use App\Service\ArticleRetentionService;
 use App\Service\ArticleService;
 use App\Service\AuthenticationService;
@@ -93,6 +97,12 @@ final class ApplicationFactory
         $urlNormalizer = new UrlNormalizer();
         $httpClient = SafeHttpClientFactory::create($config);
         $mediaStorage = new FileMediaStorage($config->mediaPath);
+        $articlePages = new ArticlePageService(
+            $httpClient,
+            new ArticlePageContentParser($urlResolver, $urlNormalizer, new ExternalHtmlTextSanitizer()),
+            new ArticleImageMetadataParser($urlResolver),
+            $config->articlePageUserAgent,
+        );
         $synchronization = new FeedSynchronizationService(
             $feeds,
             $articles,
@@ -111,8 +121,8 @@ final class ApplicationFactory
                 $config->mediaMaxWidth,
                 $config->mediaMaxHeight,
                 $config->mediaMaxPixels,
-                $config->articlePageUserAgent,
             ),
+            $articlePages,
             new FeedRefreshLock(dirname($config->cronLockPath)),
         );
         $migrator = new Migrator($pdo, $projectRoot . '/migrations');
@@ -139,6 +149,12 @@ final class ApplicationFactory
             $articleRetention,
             new FileProcessLock($config->cronLockPath),
             $articles,
+            new ArticleContentEnrichmentService(
+                $articles,
+                $articlePages,
+                new ExternalHtmlTextSanitizer(),
+                $clock,
+            ),
         );
     }
 
@@ -216,7 +232,6 @@ final class ApplicationFactory
             $config->mediaMaxWidth,
             $config->mediaMaxHeight,
             $config->mediaMaxPixels,
-            $config->articlePageUserAgent,
         );
         $feedSynchronization = new FeedSynchronizationService(
             $feedRepository,
@@ -230,6 +245,12 @@ final class ApplicationFactory
             new TransactionManager($pdo),
             $clock,
             $remoteMedia,
+            new ArticlePageService(
+                $httpClient,
+                new ArticlePageContentParser($urlResolver, $urlNormalizer, new ExternalHtmlTextSanitizer()),
+                new ArticleImageMetadataParser($urlResolver),
+                $config->articlePageUserAgent,
+            ),
             new FeedRefreshLock(dirname($config->cronLockPath)),
         );
         $feedService = new FeedService(

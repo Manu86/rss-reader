@@ -223,6 +223,12 @@ Article-page metadata fetched as a fallback for a missing feed image follows
 these rules as well; only a bounded HTML response is parsed and all discovered
 image URLs are validated again before download.
 
+The same bounded article-page response may provide public article text when the
+feed content is absent or very short. Parsing never executes JavaScript or
+submits forms, never sends publisher credentials and never attempts to bypass a
+paywall. Extracted markup passes through the normal article HTML allowlist;
+relative links and images are resolved and revalidated as HTTP(S) URLs.
+
 The metadata fallback may override the HTTP User-Agent with the configured
 browser-compatible article-page identity. This override is validated against
 control characters, follows redirects unchanged and is never reused for the

@@ -2,6 +2,7 @@ import { run } from './harness.mjs';
 import './client.test.js';
 import './router.test.js';
 import './format.test.js';
+import './reader.test.mjs';
 import './pwa.test.mjs';
 import './quality.test.mjs';
 import './accessibility.test.mjs';

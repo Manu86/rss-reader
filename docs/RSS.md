@@ -173,8 +173,17 @@ Default ordering is defined in `DATABASE.md`.
 
 Store feed-provided summary and content separately.
 
-Do not scrape source websites to reconstruct missing full article
-content.
+When feed-provided content is absent or contains fewer than 200 visible text
+characters, synchronization may fetch the public article page and retain a
+more substantial public extract. It first uses schema.org `Article` or
+`NewsArticle` `articleBody`, then semantic article-body markup. It never
+authenticates to the publisher, executes page scripts or circumvents a paywall;
+subscriber-only text is not available to this fallback.
+
+At most five article pages are fetched per feed synchronization. Article-page
+HTML is bounded to 5 MB. The same response is reused for content and image discovery. A successful
+HTML inspection is recorded even when it yields no usable content, while a
+transient retrieval failure remains eligible for a later synchronization.
 
 HTML is sanitized according to `SECURITY.md` before safe display/storage
 strategy chosen by implementation.
@@ -204,9 +213,8 @@ the body of that same page: images inside `header`, `nav`, `footer` and `aside`,
 images whose file name marks them as decorative (logo, icon, avatar, badge,
 banner…) and images declaring a side below 200 pixels are discarded. Remaining
 candidates keep the document order, and the real pixel size is checked on
-download, so a small image is never stored. This only reuses a page already
-fetched for the metadata lookup, so it adds no request. It does not use that
-page to reconstruct the article text.
+download, so a small image is never stored. Content and image extraction reuse
+the same page response when both fallbacks are needed.
 Candidate page and image URLs pass through the same centralized safe HTTP
 client and validation pipeline as feed-provided media.
 

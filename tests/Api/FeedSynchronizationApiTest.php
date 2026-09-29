@@ -178,6 +178,7 @@ XML;
         $transport = new FakeHttpTransport([
             new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feed),
             new TransportResponse(503, [], ''),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
             new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feed),
             new TransportResponse(503, [], ''),
         ]);
@@ -193,9 +194,9 @@ XML;
             ['x-csrf-token' => $csrf],
         ));
         self::assertSame(200, $refreshed->status);
-        self::assertCount(4, $transport->requests);
+        self::assertCount(5, $transport->requests);
         self::assertSame('https://site.test/image.png', $transport->requests[1]->url);
-        self::assertSame('https://site.test/image.png', $transport->requests[3]->url);
+        self::assertSame('https://site.test/image.png', $transport->requests[4]->url);
         self::assertNull($this->articles($feedId)[0]['image_metadata_checked_at']);
     }
 
@@ -424,6 +425,72 @@ XML;
             [$rebroadcasts[0]['published_at'], $rebroadcasts[1]['published_at']],
         );
         self::assertNotSame($rebroadcasts[0]['id'], $rebroadcasts[1]['id']);
+    }
+
+    public function testMissingFeedContentIsExtractedFromThePublicArticlePageAndPreserved(): void
+    {
+        $feedWithoutContent = <<<'XML'
+<?xml version="1.0"?>
+<rss version="2.0"><channel><title>Flux public</title><link>https://site.test/</link>
+  <item><guid>public-1</guid><title>Article public</title>
+    <link>https://site.test/articles/public-1</link><description>Résumé du flux.</description>
+  </item>
+</channel></rss>
+XML;
+        $feedWithContent = <<<'XML'
+<?xml version="1.0"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel>
+  <title>Flux public</title><link>https://site.test/</link>
+  <item><guid>public-1</guid><title>Article public</title>
+    <link>https://site.test/articles/public-1</link><description>Résumé du flux.</description>
+    <content:encoded><![CDATA[<p>CONTENU_FLUX_COMPLET %s</p>]]></content:encoded>
+  </item>
+</channel></rss>
+XML;
+        $feedWithContent = sprintf($feedWithContent, str_repeat('texte du flux ', 20));
+        $pageText = 'Coup de tonnerre dans les réseaux poitevins de solidarité. '
+            . str_repeat('Contenu public extrait. ', 12);
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feedWithoutContent),
+            new TransportResponse(
+                200,
+                ['content-type' => 'text/html'],
+                '<article><div data-testid="contenu-article"><p>' . $pageText . '</p></div></article>'
+            ),
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feedWithoutContent),
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feedWithContent),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+
+        $created = $this->createFeed($kernel, $csrf, 'https://feeds.test/public.xml', null);
+        self::assertSame(201, $created->status);
+        $feedId = $this->decode($created)['data']['id'];
+        self::assertIsInt($feedId);
+        $article = $this->articles($feedId)[0];
+        self::assertSame('page', $article['content_source']);
+        self::assertNotNull($article['content_page_checked_at']);
+        self::assertStringContainsString('Coup de tonnerre', (string) $article['content']);
+        self::assertSame(1, $this->tableCount('articles_fts'));
+        self::assertSame('Mozilla/5.0 RSSReader/Page-Test', $transport->requests[1]->userAgent);
+
+        self::assertSame(200, $kernel->handle(new Request(
+            'POST',
+            '/api/feeds/' . $feedId . '/refresh',
+            ['x-csrf-token' => $csrf],
+        ))->status);
+        $preserved = $this->articles($feedId)[0];
+        self::assertSame('page', $preserved['content_source']);
+        self::assertStringContainsString('Coup de tonnerre', (string) $preserved['content']);
+
+        self::assertSame(200, $kernel->handle(new Request(
+            'POST',
+            '/api/feeds/' . $feedId . '/refresh',
+            ['x-csrf-token' => $csrf],
+        ))->status);
+        $replaced = $this->articles($feedId)[0];
+        self::assertSame('feed', $replaced['content_source']);
+        self::assertStringContainsString('CONTENU_FLUX_COMPLET', (string) $replaced['content']);
+        self::assertCount(4, $transport->requests, 'La page ne doit être téléchargée qu’une fois.');
     }
 
     /** @return array{ApiKernel, string} */

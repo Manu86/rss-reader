@@ -7,19 +7,10 @@ namespace App\Service;
 use App\Exception\InvalidMediaException;
 use App\Exception\RemoteHttpException;
 use App\Http\SafeHttpClient;
-use App\Http\UrlResolver;
 use App\Storage\MediaStorage;
 
 final readonly class RemoteMediaService
 {
-    private const MAX_ARTICLE_HTML_BYTES = 1_000_000;
-    /**
-     * Côté minimal, en pixels, d'une image tirée du corps de la page. Les
-     * logos et photos d'auteur qui échappent au filtrage du parseur sont
-     * rejetés ici, avant tout stockage.
-     */
-    private const MIN_CONTENT_IMAGE_SIDE = 200;
-
     /** @var array<string, string> */
     private const MIME_EXTENSIONS = [
         'image/jpeg' => 'jpg',
@@ -37,7 +28,6 @@ final readonly class RemoteMediaService
         private int $maxWidth,
         private int $maxHeight,
         private int $maxPixels,
-        private string $articlePageUserAgent = 'RSSReader/1.0',
     ) {}
 
     public function download(int $userId, string $url, int $minSide = 1): string
@@ -67,40 +57,12 @@ final readonly class RemoteMediaService
         return $this->storage->store($userId, $response->body, $extension);
     }
 
-    public function downloadArticleImage(
-        int $userId,
-        ?string $feedImageUrl,
-        ?string $articleUrl,
-    ): string {
-        if ($feedImageUrl !== null) {
-            return $this->download($userId, $feedImageUrl);
-        }
-        if ($articleUrl === null) {
-            throw new InvalidMediaException('Aucune image distante n’est disponible.');
-        }
-
-        $response = $this->http->get(
-            $articleUrl,
-            ['accept' => 'text/html,application/xhtml+xml;q=0.9'],
-            self::MAX_ARTICLE_HTML_BYTES,
-            $this->articlePageUserAgent,
-        );
-        if ($response->status < 200 || $response->status >= 300 || !$this->isHtml($response->header('content-type'))) {
-            throw new InvalidMediaException('La page de l’article n’est pas disponible.');
-        }
-
-        $parser = new ArticleImageMetadataParser(new UrlResolver());
-        foreach ($parser->parse($response->body, $response->finalUrl) as $candidate) {
+    /** @param list<array{url: string, min_side: int}> $candidates */
+    public function downloadFirst(int $userId, array $candidates): string
+    {
+        foreach ($candidates as $candidate) {
             try {
-                return $this->download($userId, $candidate);
-            } catch (InvalidMediaException|RemoteHttpException) {
-                continue;
-            }
-        }
-        // Aucun site social : on cherche l'illustration dans le corps de la page.
-        foreach ($parser->parseContentImages($response->body, $response->finalUrl) as $candidate) {
-            try {
-                return $this->download($userId, $candidate, self::MIN_CONTENT_IMAGE_SIDE);
+                return $this->download($userId, $candidate['url'], $candidate['min_side']);
             } catch (InvalidMediaException|RemoteHttpException) {
                 continue;
             }
@@ -191,14 +153,5 @@ final readonly class RemoteMediaService
 
         return in_array($declared, ['image/x-icon', 'image/vnd.microsoft.icon'], true)
             && in_array($actual, ['image/x-icon', 'image/vnd.microsoft.icon'], true);
-    }
-
-    private function isHtml(?string $contentType): bool
-    {
-        if ($contentType === null) {
-            return true;
-        }
-
-        return in_array($this->mime($contentType), ['text/html', 'application/xhtml+xml'], true);
     }
 }

@@ -39,6 +39,7 @@ final class MigrationTest extends TestCase
                 '011_retry_article_image_metadata',
                 '012_login_attempts_address_index',
                 '013_articles_republication_lookup',
+                '014_article_page_content',
             ],
             $this->migrator->migrate(),
         );
@@ -46,6 +47,10 @@ final class MigrationTest extends TestCase
         self::assertSame(1, $this->integerQuery('PRAGMA foreign_keys'));
         self::assertSame(1, $this->integerQuery(
             "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'articles_fts'"
+        ));
+        self::assertSame(2, $this->integerQuery(
+            "SELECT COUNT(*) FROM pragma_table_info('articles') "
+            . "WHERE name IN ('content_source', 'content_page_checked_at')"
         ));
     }
 

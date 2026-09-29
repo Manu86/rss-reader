@@ -176,6 +176,10 @@ Cover:
 -   conditional `ETag`/`Last-Modified` and `304`;
 -   preservation of read/favorite/discovered state;
 -   article remains when it disappears remotely;
+-   missing/short feed content can be enriched from one bounded public page
+    request, is sanitized and survives later empty feed updates;
+-   substantial content later supplied by the feed replaces page content, and
+    completed page inspections are not repeated;
 -   one feed failure does not stop others.
 
 Use a fake/controlled remote HTTP adapter.

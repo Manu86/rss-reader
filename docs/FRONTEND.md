@@ -207,6 +207,12 @@ missing neighbour is omitted rather than rendered as a disabled control.
 Feed HTML must only be inserted through the sanitization contract from
 `SECURITY.md`.
 
+The reader displays the feed-provided summary when article content is absent or
+contains fewer than 200 visible text characters. Longer content remains
+preferred and is preceded by the summary as an introduction when that summary
+is not already present in the content. Markup does not count toward this
+threshold.
+
 Sanitized content images use their absolute HTTP(S) source URL, remain within
 the reading column and load lazily without sending an HTTP referrer. Failed
 remote images must not make the rest of the article unusable. Active video

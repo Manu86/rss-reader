@@ -130,6 +130,8 @@ published_at NULL
 discovered_at
 summary NULL
 content NULL
+content_source NULL
+content_page_checked_at NULL
 tags NULL
 image_path NULL
 image_metadata_checked_at NULL
@@ -163,6 +165,11 @@ Rules:
 -   `image_metadata_checked_at` records when the article-page image metadata
     fallback was attempted; it is set only for articles without a feed image
     candidate and prevents repeating that fallback on every synchronization;
+-   `content_source` is `feed`, `page` or `NULL`; it records whether the current
+    `content` came from the feed or from the public article-page fallback;
+-   `content_page_checked_at` records a completed HTML inspection for missing or
+    short feed content and prevents repeated page downloads. Substantial
+    content later supplied by the feed replaces page-extracted content;
 -   `tags` stores the feed-provided article tags as a JSON array of
     non-empty strings (duplicates removed, at most 10 tags of at most
     100 characters each); the value is `NULL` when the item has no tag.

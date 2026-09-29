@@ -8,6 +8,7 @@ use App\Model\Article;
 use App\Model\ArticleInsertResult;
 use App\Model\ArticleListCriteria;
 use App\Model\ParsedArticle;
+use App\Service\ArticleContentPolicy;
 use PDO;
 
 final readonly class ArticleRepository
@@ -20,19 +21,24 @@ final readonly class ArticleRepository
         $statement = $this->pdo->prepare(
             'INSERT OR IGNORE INTO articles '
             . '(user_id, feed_id, guid, guid_hash, title, url, author, published_at, '
-            . 'discovered_at, summary, content, tags, deduplication_hash, created_at, updated_at) '
+            . 'discovered_at, summary, content, content_source, tags, deduplication_hash, created_at, updated_at) '
             . 'VALUES (:user_id, :feed_id, :guid, :guid_hash, :title, :url, :author, '
-            . ':published_at, :discovered_at, :summary, :content, :tags, :deduplication_hash, '
+            . ':published_at, :discovered_at, :summary, :content, :content_source, :tags, :deduplication_hash, '
             . ':created_at, :updated_at)'
         );
-        $missingImage = $this->pdo->prepare(
-            'SELECT id FROM articles WHERE user_id = :user_id AND feed_id = :feed_id '
-            . 'AND deduplication_hash = :deduplication_hash AND image_path IS NULL '
-            . 'AND (image_metadata_checked_at IS NULL OR :has_feed_image = 1)'
+        $findExisting = $this->pdo->prepare(
+            'SELECT id, image_path, image_metadata_checked_at, content_source, content_page_checked_at '
+            . 'FROM articles WHERE user_id = :user_id AND feed_id = :feed_id '
+            . 'AND deduplication_hash = :deduplication_hash'
         );
         $updateExisting = $this->pdo->prepare(
             'UPDATE articles SET title = :title, url = :url, author = :author, '
-            . 'published_at = :published_at, summary = :summary, content = :content, '
+            . 'published_at = :published_at, summary = :summary, '
+            . 'content = CASE WHEN CAST(:content_is_substantial AS INTEGER) = 1 THEN :content '
+            . "WHEN content_source = 'page' THEN content ELSE :content END, "
+            . 'content_source = CASE WHEN CAST(:content_is_substantial AS INTEGER) = 1 THEN \'feed\' '
+            . "WHEN content_source = 'page' THEN 'page' "
+            . "WHEN :content IS NULL THEN NULL ELSE 'feed' END, "
             . 'tags = :tags, updated_at = :updated_at WHERE user_id = :user_id AND feed_id = :feed_id '
             . 'AND deduplication_hash = :deduplication_hash'
         );
@@ -44,7 +50,8 @@ final readonly class ArticleRepository
         // chaque semaine sous une URL et un titre identiques, et ces rediffusions sont
         // des articles distincts.
         $republished = $this->pdo->prepare(
-            'SELECT id, CASE WHEN image_path IS NULL '
+            'SELECT id, image_path, image_metadata_checked_at, content_source, content_page_checked_at, '
+            . 'CASE WHEN image_path IS NULL '
             . 'AND (image_metadata_checked_at IS NULL OR :has_feed_image = 1) THEN 1 ELSE 0 END '
             . 'AS wants_media FROM articles WHERE user_id = :user_id AND feed_id = :feed_id '
             . 'AND url = :url AND title = :title AND deduplication_hash <> :deduplication_hash '
@@ -53,16 +60,25 @@ final readonly class ArticleRepository
         );
         $updateById = $this->pdo->prepare(
             'UPDATE articles SET title = :title, url = :url, author = :author, '
-            . 'published_at = :published_at, summary = :summary, content = :content, '
+            . 'published_at = :published_at, summary = :summary, '
+            . 'content = CASE WHEN CAST(:content_is_substantial AS INTEGER) = 1 THEN :content '
+            . "WHEN content_source = 'page' THEN content ELSE :content END, "
+            . 'content_source = CASE WHEN CAST(:content_is_substantial AS INTEGER) = 1 THEN \'feed\' '
+            . "WHEN content_source = 'page' THEN 'page' "
+            . "WHEN :content IS NULL THEN NULL ELSE 'feed' END, "
             . 'tags = :tags, updated_at = :updated_at WHERE id = :id AND user_id = :user_id'
         );
         $inserted = 0;
         /** @var array<int, array{id: int, image_url: string|null, article_url: string|null, metadata_fallback: bool}> $mediaCandidates */
         $mediaCandidates = [];
+        /** @var array<int, array{id: int, article_url: string, content_fallback: bool, image_fallback: bool}> $pageCandidates */
+        $pageCandidates = [];
         foreach ($articles as $article) {
             $existingId = null;
             $isRepublish = false;
             $wantsMedia = false;
+            $wantsPageContent = false;
+            $contentIsSubstantial = ArticleContentPolicy::isSubstantial($article->content);
             if ($article->url !== null) {
                 $republished->execute([
                     'user_id' => $userId,
@@ -78,6 +94,9 @@ final readonly class ArticleRepository
                     $existingId = (int) $row['id'];
                     $isRepublish = true;
                     $wantsMedia = (int) $row['wants_media'] === 1;
+                    $wantsPageContent = !$contentIsSubstantial
+                        && $row['content_page_checked_at'] === null
+                        && $row['content_source'] !== 'page';
                 }
             }
             if ($existingId === null) {
@@ -93,6 +112,7 @@ final readonly class ArticleRepository
                     'discovered_at' => $discoveredAt,
                     'summary' => $article->summary,
                     'content' => $article->content,
+                    'content_source' => $article->content === null ? null : 'feed',
                     'tags' => $article->tags === [] ? null : json_encode(array_values($article->tags), JSON_UNESCAPED_UNICODE),
                     'deduplication_hash' => $article->deduplicationHash,
                     'created_at' => $discoveredAt,
@@ -102,27 +122,43 @@ final readonly class ArticleRepository
                     ++$inserted;
                     if ($article->imageUrl !== null || $article->url !== null) {
                         $articleId = (int) $this->pdo->lastInsertId();
-                        $mediaCandidates[$articleId] = [
+                        if ($article->imageUrl !== null) {
+                            $mediaCandidates[$articleId] = [
+                                'id' => $articleId,
+                                'image_url' => $article->imageUrl,
+                                'article_url' => $article->url,
+                                'metadata_fallback' => false,
+                            ];
+                        }
+                    } else {
+                        $articleId = (int) $this->pdo->lastInsertId();
+                    }
+                    if ($article->url !== null && (!$contentIsSubstantial || $article->imageUrl === null)) {
+                        $pageCandidates[$articleId] = [
                             'id' => $articleId,
-                            'image_url' => $article->imageUrl,
                             'article_url' => $article->url,
-                            'metadata_fallback' => $article->imageUrl === null,
+                            'content_fallback' => !$contentIsSubstantial,
+                            'image_fallback' => $article->imageUrl === null,
                         ];
                     }
 
                     continue;
                 }
-                if ($article->imageUrl !== null || $article->url !== null) {
-                    $missingImage->execute([
+                if ($article->imageUrl !== null || $article->url !== null || !$contentIsSubstantial) {
+                    $findExisting->execute([
                         'user_id' => $userId,
                         'feed_id' => $feedId,
                         'deduplication_hash' => $article->deduplicationHash,
-                        'has_feed_image' => $article->imageUrl !== null ? 1 : 0,
                     ]);
-                    $articleId = $missingImage->fetchColumn();
-                    if ($articleId !== false) {
-                        $existingId = (int) $articleId;
-                        $wantsMedia = true;
+                    $row = $findExisting->fetch(PDO::FETCH_ASSOC);
+                    if (is_array($row)) {
+                        $existingId = (int) $row['id'];
+                        $wantsMedia = $row['image_path'] === null
+                            && ($row['image_metadata_checked_at'] === null || $article->imageUrl !== null);
+                        $wantsPageContent = !$contentIsSubstantial
+                            && $article->url !== null
+                            && $row['content_page_checked_at'] === null
+                            && $row['content_source'] !== 'page';
                     }
                 }
             }
@@ -133,16 +169,25 @@ final readonly class ArticleRepository
                 'published_at' => $article->publishedAt,
                 'summary' => $article->summary,
                 'content' => $article->content,
+                'content_is_substantial' => $contentIsSubstantial ? 1 : 0,
                 'tags' => $article->tags === [] ? null : json_encode(array_values($article->tags), JSON_UNESCAPED_UNICODE),
                 'updated_at' => $discoveredAt,
             ];
-            if ($existingId !== null && $wantsMedia
-                && ($article->imageUrl !== null || $article->url !== null)) {
+            if ($existingId !== null && $wantsMedia && $article->imageUrl !== null) {
                 $mediaCandidates[$existingId] = [
                     'id' => $existingId,
                     'image_url' => $article->imageUrl,
                     'article_url' => $article->url,
-                    'metadata_fallback' => $article->imageUrl === null,
+                    'metadata_fallback' => false,
+                ];
+            }
+            if ($existingId !== null && $article->url !== null
+                && ($wantsPageContent || ($wantsMedia && $article->imageUrl === null))) {
+                $pageCandidates[$existingId] = [
+                    'id' => $existingId,
+                    'article_url' => $article->url,
+                    'content_fallback' => $wantsPageContent,
+                    'image_fallback' => $wantsMedia && $article->imageUrl === null,
                 ];
             }
             if ($isRepublish) {
@@ -160,7 +205,7 @@ final readonly class ArticleRepository
             ]);
         }
 
-        return new ArticleInsertResult($inserted, array_values($mediaCandidates));
+        return new ArticleInsertResult($inserted, array_values($mediaCandidates), array_values($pageCandidates));
     }
 
     public function setImagePath(int $articleId, int $userId, string $path, string $now): bool
@@ -191,6 +236,90 @@ final readonly class ArticleRepository
             'id' => $articleId,
             'user_id' => $userId,
         ]);
+    }
+
+    public function setPageContent(int $articleId, int $userId, string $content, string $now): bool
+    {
+        $statement = $this->pdo->prepare(
+            "UPDATE articles SET content = :content, content_source = 'page', "
+            . 'content_page_checked_at = :checked_at, updated_at = :updated_at '
+            . 'WHERE id = :id AND user_id = :user_id'
+        );
+        $statement->execute([
+            'content' => $content,
+            'checked_at' => $now,
+            'updated_at' => $now,
+            'id' => $articleId,
+            'user_id' => $userId,
+        ]);
+
+        return $statement->rowCount() === 1;
+    }
+
+    public function markPageContentChecked(int $articleId, int $userId, string $now): void
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE articles SET content_page_checked_at = :checked_at, updated_at = :updated_at '
+            . 'WHERE id = :id AND user_id = :user_id AND content_page_checked_at IS NULL'
+        );
+        $statement->execute([
+            'checked_at' => $now,
+            'updated_at' => $now,
+            'id' => $articleId,
+            'user_id' => $userId,
+        ]);
+    }
+
+    /** @return list<array{id: int, user_id: int, content: string}> */
+    public function encodedPageContentCandidates(): array
+    {
+        $statement = $this->pdo->query(
+            "SELECT id, user_id, content FROM articles WHERE content_source = 'page' "
+            . "AND content IS NOT NULL AND (content LIKE '%&amp;amp;%' "
+            . "OR content LIKE '%&amp;lt;%' OR content LIKE '%&amp;gt;%' "
+            . "OR content LIKE '%&amp;quot;%')"
+        );
+        if ($statement === false) {
+            return [];
+        }
+        $candidates = [];
+        foreach ($statement->fetchAll() as $row) {
+            $candidates[] = [
+                'id' => (int) $row['id'],
+                'user_id' => (int) $row['user_id'],
+                'content' => (string) $row['content'],
+            ];
+        }
+
+        return $candidates;
+    }
+
+    /** @return list<array{id: int, user_id: int, url: string}> */
+    public function pendingPageContentCandidates(): array
+    {
+        $statement = $this->pdo->query(
+            'SELECT id, user_id, url, content FROM articles '
+            . 'WHERE url IS NOT NULL AND content_page_checked_at IS NULL '
+            . 'ORDER BY COALESCE(published_at, discovered_at) DESC, id DESC'
+        );
+        if ($statement === false) {
+            return [];
+        }
+        $candidates = [];
+        while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
+            if (!is_array($row) || ArticleContentPolicy::isSubstantial(
+                $row['content'] === null ? null : (string) $row['content'],
+            )) {
+                continue;
+            }
+            $candidates[] = [
+                'id' => (int) $row['id'],
+                'user_id' => (int) $row['user_id'],
+                'url' => (string) $row['url'],
+            ];
+        }
+
+        return $candidates;
     }
 
     public function findImagePathOwned(int $articleId, int $userId): ?string

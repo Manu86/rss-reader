@@ -8,6 +8,7 @@ use App\Database\Migrator;
 use App\Exception\ValidationException;
 use App\Repository\ArticleRepository;
 use App\Repository\UserRepository;
+use App\Service\ArticleContentEnrichmentService;
 use App\Service\ArticleRetentionService;
 use App\Service\AutomaticFeedRefreshService;
 use App\Service\InstallationService;
@@ -28,6 +29,7 @@ final readonly class ConsoleApplication
         private ArticleRetentionService $articleRetention,
         private ProcessLock $maintenanceLock,
         private ArticleRepository $articles,
+        private ArticleContentEnrichmentService $articleContentEnrichment,
     ) {}
 
     /** @param list<string> $arguments */
@@ -45,6 +47,7 @@ final readonly class ConsoleApplication
                 'user:disable' => $this->setUserActive($arguments, false),
                 'feeds:refresh' => $this->refreshFeeds(),
                 'articles:cleanup' => $this->cleanupArticles(),
+                'articles:enrich-content' => $this->enrichArticleContent(),
                 'fts:rebuild' => $this->rebuildSearchIndex(),
                 'help', '--help', '-h' => $this->help(),
                 default => $this->unknownCommand($command),
@@ -186,6 +189,7 @@ Commandes disponibles :
   user:disable <utilisateur>
   feeds:refresh
   articles:cleanup
+  articles:enrich-content
   fts:rebuild
 HELP
         );
@@ -269,6 +273,37 @@ HELP
         fwrite(STDOUT, 'Index de recherche reconstruit.' . PHP_EOL);
 
         return 0;
+    }
+
+    private function enrichArticleContent(): int
+    {
+        if (!$this->maintenanceLock->acquire()) {
+            fwrite(STDERR, 'Une tâche de maintenance est déjà en cours.' . PHP_EOL);
+
+            return 75;
+        }
+
+        try {
+            $summary = $this->articleContentEnrichment->run(static function (int $done, int $total): void {
+                if ($done % 25 === 0 || $done === $total) {
+                    fwrite(STDOUT, sprintf("Progression : %d/%d%s", $done, $total, PHP_EOL));
+                }
+            });
+        } finally {
+            $this->maintenanceLock->release();
+        }
+        fwrite(STDOUT, sprintf(
+            'Enrichissement terminé : %d contenu(s) réparé(s), %d candidat(s), %d contenu(s) extrait(s), '
+            . '%d page(s) sans contenu, %d échec(s).%s',
+            $summary['repaired'],
+            $summary['total'],
+            $summary['extracted'],
+            $summary['empty'],
+            $summary['failed'],
+            PHP_EOL,
+        ));
+
+        return $summary['failed'] === 0 ? 0 : 1;
     }
 
     private function unknownCommand(string $command): int

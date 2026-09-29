@@ -6,7 +6,7 @@ import { SettingsView } from './views/settings.js?v=8';
 import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js';
 import { createLoginView } from './views/login.js';
 import { ArticlesView } from './views/articles.js?v=28';
-import { ReaderView } from './views/reader.js?v=33';
+import { ReaderView } from './views/reader.js?v=35';
 import { buildRoute, parseRoute } from './router.js?v=26';
 import { errorMessage, el, icon, setChildren } from './utils/dom.js';
 
@@ -835,7 +835,9 @@ function focusRoute(route, previousRoute = null) {
             `[data-article-id="${Number(previousRoute.params.id)}"] .article-card-link`,
         ) || null;
     }
-    target ||= dom.articleTitle || dom.main;
+    if (!target) {
+        target = dom.articleTitle || dom.main;
+    }
     if (!target) return;
     if (target.tabIndex < 0 && !target.hasAttribute('tabindex')) {
         target.setAttribute('tabindex', '-1');

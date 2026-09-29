@@ -14,6 +14,7 @@ import {
 const DEFAULT_PLACEHOLDER_TITLE = 'Sélectionnez un article';
 const DEFAULT_PLACEHOLDER_MESSAGE = 'Choisissez un article dans la liste pour le lire ici.';
 const EMPTY_CONTENT = 'Le contenu de cet article n’est pas disponible.';
+const MINIMUM_ARTICLE_CONTENT_TEXT_LENGTH = 200;
 const NOOP = () => {};
 
 function isObject(value) {
@@ -448,6 +449,36 @@ function articleTitle(article) {
 
 function articleSummary(article) {
     return nonEmpty(article && article.summary) ? textValue(article.summary) : EMPTY_CONTENT;
+}
+
+function visibleText(value) {
+    const markup = textValue(value).trim();
+    if (markup === '') {
+        return '';
+    }
+    if (typeof DOMParser !== 'undefined') {
+        const parsed = new DOMParser().parseFromString(markup, 'text/html');
+        return textValue(parsed.body.textContent).replace(/\s+/gu, ' ').trim();
+    }
+    return markup.replace(/<[^>]*>/gu, ' ').replace(/\s+/gu, ' ').trim();
+}
+
+export function selectArticleContent(article) {
+    const content = nonEmpty(article && article.content) ? textValue(article.content) : null;
+    const summary = nonEmpty(article && article.summary) ? textValue(article.summary) : null;
+    const contentText = visibleText(content);
+    if (summary !== null && contentText.length < MINIMUM_ARTICLE_CONTENT_TEXT_LENGTH) {
+        return summary;
+    }
+    if (content !== null) {
+        const summaryText = visibleText(summary);
+        if (summary !== null && summaryText !== ''
+            && !contentText.toLocaleLowerCase().includes(summaryText.toLocaleLowerCase())) {
+            return `${summary}\n${content}`;
+        }
+        return content;
+    }
+    return summary ?? EMPTY_CONTENT;
 }
 
 function createFavicon(article) {
@@ -974,9 +1005,7 @@ export class ReaderView {
             text: date.label,
             attrs: date.raw === null ? {} : { datetime: textValue(date.raw) },
         });
-        const contentText = nonEmpty(article.content)
-            ? textValue(article.content)
-            : articleSummary(article);
+        const contentText = selectArticleContent(article);
         const headerChildren = [
             renderBackButton(this.callbacks.onBack),
             viewEl('div', { className: 'reader-heading' }, [

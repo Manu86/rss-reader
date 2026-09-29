@@ -36,6 +36,9 @@ use App\Security\LoginRateLimiter;
 use App\Security\PasswordPolicy;
 use App\Security\RemoteActionRateLimiter;
 use App\Security\RemoteUrlGuard;
+use App\Service\ArticleImageMetadataParser;
+use App\Service\ArticlePageContentParser;
+use App\Service\ArticlePageService;
 use App\Service\ArticleService;
 use App\Service\AuthenticationService;
 use App\Service\CategoryService;
@@ -172,6 +175,12 @@ final readonly class TestApplication
             new TransactionManager($this->pdo),
             $clock,
             $remoteMedia,
+            new ArticlePageService(
+                $httpClient,
+                new ArticlePageContentParser($urlResolver, $urlNormalizer, new ExternalHtmlTextSanitizer()),
+                new ArticleImageMetadataParser($urlResolver),
+                'Mozilla/5.0 RSSReader/Page-Test',
+            ),
             new FeedRefreshLock($this->lockDirectory),
         );
         $feedController = new FeedController(new FeedService(

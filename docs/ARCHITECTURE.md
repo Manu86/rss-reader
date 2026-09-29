@@ -176,6 +176,12 @@ normalizes RSS 2.0 and Atom into transport-independent models.
 transactions through repositories; controllers never parse XML or write SQL.
 Initial import and both manual-refresh endpoints reuse these components.
 
+`ArticlePageService` performs the bounded public article-page fallback outside
+database transactions. One validated HTML response is shared by
+`ArticlePageContentParser` and `ArticleImageMetadataParser`, so content and
+illustration discovery never download the same page twice during one
+synchronization.
+
 Application services consume normalized feed/article objects and should
 not contain format-specific XML logic.
 
@@ -229,10 +235,16 @@ user:enable
 user:disable
 feeds:refresh
 articles:cleanup
+articles:enrich-content
 fts:rebuild
 ```
 
 Exact names may vary slightly but must remain documented and stable.
+
+`articles:enrich-content` performs a resumable backfill of every article whose
+feed content is absent or shorter than 200 visible characters. Completed page
+inspections are skipped, each successful result is persisted immediately and
+the maintenance lock prevents overlap with feed synchronization.
 
 Commands return `0` on success and non-zero on failure.
 

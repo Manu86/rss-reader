@@ -193,8 +193,10 @@ Search results are always limited to the authenticated user's data.
 
 ## Article content
 
-The application displays content supplied by the feed; it does not
-scrape the source website to reconstruct full articles.
+The application primarily displays content supplied by the feed. When that
+content is absent or shorter than 200 visible characters, it may store a
+sanitized extract that the public source page delivers without authentication.
+It never bypasses subscriber access or reconstructs unavailable text.
 
 Remote HTML is untrusted and must follow `SECURITY.md`.
 
