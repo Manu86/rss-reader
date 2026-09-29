@@ -23,6 +23,13 @@ final class ConnectionFactory
         ]);
         $pdo->exec('PRAGMA foreign_keys = ON');
         $pdo->exec('PRAGMA busy_timeout = 5000');
+        $pdo->exec('PRAGMA journal_mode = WAL');
+        $pdo->exec('PRAGMA wal_autocheckpoint = 512');
+        $statement = $pdo->query('PRAGMA journal_mode');
+        $journalMode = $statement !== false ? $statement->fetchColumn() : false;
+        if (!is_string($journalMode) || strtolower($journalMode) !== 'wal') {
+            throw new RuntimeException('Le mode journal WAL est requis pour la base de donnees.');
+        }
 
         return $pdo;
     }

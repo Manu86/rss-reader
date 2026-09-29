@@ -319,3 +319,30 @@ var/database/rss-reader.sqlite
 ```
 
 Backups should include both SQLite data and local media.
+
+### Write-ahead log
+
+The database uses the write-ahead log mode, which lets readers and the
+synchronization writer work concurrently instead of blocking each other, and
+keeps the write transaction out of the readers' way.
+
+-   `journal_mode` is `WAL`, verified when the connection is opened. A
+    filesystem that cannot provide it (NFS, some network and shared volumes)
+    makes the application refuse to start instead of silently running in a
+    slower, differently behaving mode;
+-   committed data that has not been merged back into the database file lives
+    in `var/database/rss-reader.sqlite-wal` and its index in
+    `rss-reader.sqlite-shm`. Both are recreated by SQLite, they are not
+    backups, and they must not be deleted while the application runs;
+-   an automatic checkpoint of 512 pages merges the log back into the database
+    so it cannot grow without bound. `PRAGMA wal_checkpoint(TRUNCATE)` can be
+    run by an operator to reclaim its space;
+-   `synchronous` stays at `FULL`: WAL removes the reader/writer contention, not
+    the cost of making a commit durable, and read states, favorites, settings
+    and accounts cannot be rebuilt from the feeds.
+
+**Backups must go through SQLite, not through a file copy of the database
+while the application runs**: committed transactions may still be in the
+write-ahead log, so copying the `.sqlite` file alone can silently lose them.
+Use the SQLite backup API, the `.backup` command, or stop the application. Do
+the same when moving the database to another host.
