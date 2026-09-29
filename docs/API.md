@@ -235,13 +235,18 @@ Refresh one active owned feed.
 }
 ```
 
-A disabled feed returns `409 FEED_DISABLED`. A foreign feed behaves as `404`.
-Conditional retrieval can return `not_modified: true` with zero imports.
+A disabled feed returns `409 FEED_DISABLED`. A feed already being
+synchronized, by another request or by the cron, returns `409 FEED_BUSY`
+without contacting the remote source and without recording a fetch attempt. A
+foreign feed behaves as `404`. Conditional retrieval can return
+`not_modified: true` with zero imports.
 
 ### `POST /api/feeds/refresh`
 
 Refresh all active feeds of the current user. Partial failures are
-reported without cancelling successful feeds.
+reported without cancelling successful feeds. A feed already being
+synchronized is reported as an error entry with code `FEED_BUSY`, so it is
+retried by the next refresh or by the cron.
 
 ``` json
 {

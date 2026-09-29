@@ -52,6 +52,7 @@ use App\Service\FeedDiscoveryService;
 use App\Service\FeedDocumentDetector;
 use App\Service\FeedFetcher;
 use App\Service\FeedParser;
+use App\Service\FeedRefreshLock;
 use App\Service\FeedService;
 use App\Service\FeedSynchronizationService;
 use App\Service\FtsQueryBuilder;
@@ -112,6 +113,7 @@ final class ApplicationFactory
                 $config->mediaMaxPixels,
                 $config->articlePageUserAgent,
             ),
+            new FeedRefreshLock(dirname($config->cronLockPath)),
         );
         $migrator = new Migrator($pdo, $projectRoot . '/migrations');
         $mediaCleanup = new MediaCleanupService(new MediaReferenceRepository($pdo), $mediaStorage);
@@ -228,6 +230,7 @@ final class ApplicationFactory
             new TransactionManager($pdo),
             $clock,
             $remoteMedia,
+            new FeedRefreshLock(dirname($config->cronLockPath)),
         );
         $feedService = new FeedService(
             $feedRepository,

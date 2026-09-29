@@ -277,7 +277,11 @@ Current implementation details:
 -   existing rows are left unchanged, preserving original remote fields,
     `discovered_at`, read state and favorite state;
 -   `ETag` and `Last-Modified` drive conditional requests and `304` is recorded
-    as a successful refresh.
+    as a successful refresh;
+-   a refresh takes an exclusive non-blocking lock on its feed, so the HTTP
+    endpoint, a manual refresh and the cron never synchronize the same feed at
+    the same time, and a late writer cannot overwrite the validator recorded by
+    the synchronization that imported the articles.
 -   RSS enclosures, Media RSS content/thumbnails, Atom enclosures and the first
     safe HTTP(S) image found in feed-provided content are image candidates;
 -   declared RSS channel images and Atom icon/logo elements are favicon
@@ -315,13 +319,16 @@ Manual refresh and cron use the same synchronization service.
 -   refresh all: active feeds for the user;
 -   cron: active feeds for enabled users.
 
-A failure on one feed must not stop unrelated feeds.
+A failure on one feed must not stop unrelated feeds. A feed whose lock is
+already held is skipped and counted as such, never as a failure: it is
+being synchronized elsewhere.
 
 The automatic path is exposed as `php bin/console feeds:refresh`. It bypasses
 the interactive per-user abuse limiter because it is a trusted local command,
-but it uses an exclusive non-blocking process lock. Failures are logged with
-user/feed identifiers and controlled error codes; URLs, response bodies and
-credentials are not logged.
+but it uses an exclusive non-blocking process lock for the whole batch, in
+addition to the per-feed locks. Its summary reports skipped feeds apart from
+failures. Failures are logged with user/feed identifiers and controlled error
+codes; URLs, response bodies and credentials are not logged.
 
 ## Retention interaction
 

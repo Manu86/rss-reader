@@ -8,6 +8,7 @@ use App\Clock\Clock;
 use App\Database\TransactionManager;
 use App\Exception\ApiException;
 use App\Exception\ConflictException;
+use App\Exception\FeedBusyException;
 use App\Model\ArticleInsertResult;
 use App\Model\Feed;
 use App\Model\ParsedFeed;
@@ -25,6 +26,7 @@ final readonly class FeedSynchronizationService implements FeedRefresher
         private TransactionManager $transactions,
         private Clock $clock,
         private RemoteMediaService $media,
+        private FeedRefreshLock $locks,
     ) {}
 
     public function create(
@@ -86,6 +88,24 @@ final readonly class FeedSynchronizationService implements FeedRefresher
 
     /** @return array{feed: Feed, imported_articles: int, not_modified: bool} */
     public function refresh(Feed $feed): array
+    {
+        // Le verrou est pris avant d'enregistrer la tentative : un flux occupé
+        // ne doit laisser aucune trace de synchronisation, et surtout ne doit
+        // jamais écraser le validateur HTTP écrit par la synchronisation en
+        // cours, qui a elle-même importé les articles correspondants.
+        if (!$this->locks->acquire($feed->id)) {
+            throw FeedBusyException::alreadyRefreshing();
+        }
+
+        try {
+            return $this->synchronize($feed);
+        } finally {
+            $this->locks->release($feed->id);
+        }
+    }
+
+    /** @return array{feed: Feed, imported_articles: int, not_modified: bool} */
+    private function synchronize(Feed $feed): array
     {
         $attemptedAt = $this->now();
         $this->feeds->markAttempt($feed, $attemptedAt);

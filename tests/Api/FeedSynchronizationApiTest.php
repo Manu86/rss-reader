@@ -13,6 +13,7 @@ use App\Http\TransportResponse;
 use App\Http\UrlResolver;
 use App\Security\IpAddressValidator;
 use App\Security\RemoteUrlGuard;
+use App\Service\FeedRefreshLock;
 use App\Validation\UrlNormalizer;
 use PDO;
 use PHPUnit\Framework\TestCase;
@@ -104,6 +105,63 @@ final class FeedSynchronizationApiTest extends TestCase
         self::assertSame(200, $notModified->status);
         self::assertTrue($this->decode($notModified)['data']['not_modified']);
         self::assertSame('"v2"', $transport->requests[5]->headers['if-none-match']);
+    }
+
+    public function testRefreshOfAFeedAlreadyBeingRefreshedIsRefused(): void
+    {
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, [
+                'content-type' => 'application/rss+xml',
+                'etag' => '"v1"',
+            ], $this->fixture('sync-rss.xml')),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, ['content-type' => 'text/html'], '<html></html>'),
+            new TransportResponse(200, [
+                'content-type' => 'application/rss+xml',
+                'etag' => '"v2"',
+            ], $this->fixture('sync-rss-updated.xml')),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+        $created = $this->createFeed($kernel, $csrf, 'https://feeds.test/rss.xml', null);
+        self::assertSame(201, $created->status);
+        $feedId = $this->decode($created)['data']['id'];
+        self::assertIsInt($feedId);
+        $attemptedBefore = $this->feedColumn($feedId, 'last_fetch_attempt_at');
+
+        // Un second appel de l'API pendant une synchronisation en cours, ou le
+        // cron pendant une actualisation manuelle : le flux est refuse, aucune
+        // requete distante n'est faite et le validateur HTTP de la
+        // synchronisation en cours n'est pas ecrase.
+        $locks = new FeedRefreshLock($this->application->lockDirectory);
+        $requestsBefore = count($transport->requests);
+        self::assertTrue($locks->acquire($feedId));
+        try {
+            $busy = $kernel->handle(new Request(
+                'POST',
+                '/api/feeds/' . $feedId . '/refresh',
+                ['x-csrf-token' => $csrf],
+            ));
+            self::assertSame(409, $busy->status);
+            self::assertSame('FEED_BUSY', $this->decode($busy)['error']['code']);
+        } finally {
+            $locks->release($feedId);
+        }
+
+        self::assertCount(
+            $requestsBefore,
+            $transport->requests,
+            'Un flux occupe ne declenche aucune requete distante',
+        );
+        self::assertSame($attemptedBefore, $this->feedColumn($feedId, 'last_fetch_attempt_at'));
+        self::assertSame('"v1"', $this->feedColumn($feedId, 'etag'));
+
+        $released = $kernel->handle(new Request(
+            'POST',
+            '/api/feeds/' . $feedId . '/refresh',
+            ['x-csrf-token' => $csrf],
+        ));
+        self::assertSame(200, $released->status);
+        self::assertSame('"v2"', $this->feedColumn($feedId, 'etag'));
     }
 
     public function testExplicitFeedImageRemainsEligibleForRetryAfterDownloadFailure(): void
@@ -455,6 +513,16 @@ XML;
         self::assertNotFalse($statement);
 
         return (int) $statement->fetchColumn();
+    }
+
+    private function feedColumn(int $feedId, string $column): mixed
+    {
+        $statement = $this->pdo->prepare(sprintf('SELECT %s FROM feeds WHERE id = :id', $column));
+        $statement->execute(['id' => $feedId]);
+        $value = $statement->fetchColumn();
+        self::assertNotFalse($value, sprintf('La colonne %s doit exister.', $column));
+
+        return $value;
     }
 
     private function fixture(string $name): string

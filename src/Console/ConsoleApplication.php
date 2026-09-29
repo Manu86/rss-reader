@@ -210,10 +210,11 @@ HELP
             $this->maintenanceLock->release();
         }
         fwrite(STDOUT, sprintf(
-            'Synchronisation terminée : %d flux, %d succès, %d échec(s), %d article(s) importé(s), '
-            . '%d inchangé(s), %d ancien(s) article(s) supprimé(s).%s',
+            'Synchronisation terminée : %d flux, %d succès, %d ignoré(s), %d échec(s), '
+            . '%d article(s) importé(s), %d inchangé(s), %d ancien(s) article(s) supprimé(s).%s',
             $summary['total'],
             $summary['successful'],
+            $summary['skipped'],
             $summary['failed'],
             $summary['imported_articles'],
             $summary['not_modified'],
@@ -235,6 +236,8 @@ HELP
             fwrite(STDOUT, 'Recommandations par email : transport non configuré.' . PHP_EOL);
         }
 
+        // Un flux ignore est deja en cours d'actualisation ailleurs : le cron
+        // reste un succes tant qu'aucun flux n'a echoue.
         return $summary['failed'] === 0 && $digestSummary['failed'] === 0 ? 0 : 1;
     }
 

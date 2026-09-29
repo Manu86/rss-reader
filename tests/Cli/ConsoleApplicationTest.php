@@ -113,7 +113,10 @@ final class ConsoleApplicationTest extends TestCase
 
         $refresh = $this->runConsole(['feeds:refresh']);
         self::assertSame(0, $refresh['exit_code'], $refresh['stderr']);
-        self::assertStringContainsString('Synchronisation terminée : 0 flux', $refresh['stdout']);
+        self::assertStringContainsString(
+            'Synchronisation terminée : 0 flux, 0 succès, 0 ignoré(s), 0 échec(s)',
+            $refresh['stdout'],
+        );
 
         $rebuild = $this->runConsole(['fts:rebuild']);
         self::assertSame(0, $rebuild['exit_code'], $rebuild['stderr']);

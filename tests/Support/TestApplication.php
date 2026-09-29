@@ -44,6 +44,7 @@ use App\Service\FeedDiscoveryService;
 use App\Service\FeedDocumentDetector;
 use App\Service\FeedFetcher;
 use App\Service\FeedParser;
+use App\Service\FeedRefreshLock;
 use App\Service\FeedService;
 use App\Service\FeedSynchronizationService;
 use App\Service\FtsQueryBuilder;
@@ -66,6 +67,7 @@ final readonly class TestApplication
     public UserRepository $users;
     public UserService $userService;
     public MemoryMediaStorage $mediaStorage;
+    public string $lockDirectory;
 
     public function __construct(
         private PDO $pdo,
@@ -73,6 +75,7 @@ final readonly class TestApplication
     ) {
         (new Migrator($this->pdo, $this->migrationDirectory))->migrate();
         $clock = new FrozenClock(new DateTimeImmutable('2026-09-24T12:00:00Z'));
+        $this->lockDirectory = sys_get_temp_dir() . '/rss-reader-locks-' . bin2hex(random_bytes(8));
         $this->users = new UserRepository($this->pdo);
         $this->userService = new UserService(
             $this->users,
@@ -81,6 +84,17 @@ final readonly class TestApplication
             $clock,
         );
         $this->mediaStorage = new MemoryMediaStorage();
+    }
+
+    public function __destruct()
+    {
+        if (!is_dir($this->lockDirectory)) {
+            return;
+        }
+        foreach (glob($this->lockDirectory . '/*') ?: [] as $file) {
+            unlink($file);
+        }
+        @rmdir($this->lockDirectory);
     }
 
     public function kernel(ArraySession $session, ?SafeHttpClient $httpClient = null): ApiKernel
@@ -158,6 +172,7 @@ final readonly class TestApplication
             new TransactionManager($this->pdo),
             $clock,
             $remoteMedia,
+            new FeedRefreshLock($this->lockDirectory),
         );
         $feedController = new FeedController(new FeedService(
             $feedRepository,

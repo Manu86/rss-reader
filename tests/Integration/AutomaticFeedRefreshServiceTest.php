@@ -6,6 +6,7 @@ namespace Tests\Integration;
 
 use App\Database\ConnectionFactory;
 use App\Database\Migrator;
+use App\Exception\FeedBusyException;
 use App\Exception\FeedSyncException;
 use App\Model\Feed;
 use App\Repository\FeedRepository;
@@ -55,8 +56,40 @@ final class AutomaticFeedRefreshServiceTest extends TestCase
             'total' => 2,
             'successful' => 1,
             'failed' => 1,
+            'skipped' => 0,
             'imported_articles' => 3,
             'not_modified' => 1,
+        ], $summary);
+    }
+
+    public function testBusyFeedIsSkippedInsteadOfCountedAsAFailure(): void
+    {
+        $refresher = new class implements FeedRefresher {
+            /** @var list<int> */
+            public array $seen = [];
+
+            public function refresh(Feed $feed): array
+            {
+                $this->seen[] = $feed->id;
+                if ($feed->id === 10) {
+                    throw FeedBusyException::alreadyRefreshing();
+                }
+
+                return ['feed' => $feed, 'imported_articles' => 1, 'not_modified' => false];
+            }
+        };
+        $service = new AutomaticFeedRefreshService(new FeedRepository($this->pdo), $refresher);
+
+        $summary = $service->run();
+
+        self::assertSame([10, 11], $refresher->seen);
+        self::assertSame([
+            'total' => 2,
+            'successful' => 1,
+            'failed' => 0,
+            'skipped' => 1,
+            'imported_articles' => 1,
+            'not_modified' => 0,
         ], $summary);
     }
 
