@@ -292,6 +292,21 @@ test('la liste d’articles d’un flux propose Modifier avant Supprimer', () =>
     assert.match(app, /function editFeedFromArticles\(feedId\)/);
     assert.match(app, /openFeedEditorDialog\(\{\s*feed,\s*categories: app\.categories,/);
     assert.match(app, /onEditFeed:\s*\(id\) => editFeedFromArticles\(id\)/);
+
+    // La modale d'édition embarque la suppression : le bouton passe par la
+    // confirmation dédiée, jamais par une suppression immédiate.
+    const dialogs = read('assets/js/views/feed-dialogs.js');
+    const editor = dialogs.slice(
+        dialogs.indexOf('export function openFeedEditorDialog'),
+        dialogs.indexOf('export function openCategoryDialog'),
+    );
+    assert.match(editor, /openFeedEditorDialog\(\{ feed, categories = \[\], onSave, onDelete \} = \{\}\)/);
+    assert.match(editor, /button\('Supprimer le flux', \{/);
+    assert.match(editor, /className: 'button button-danger'/);
+    assert.match(editor, /icon: 'trash'/);
+    assert.match(editor, /closeDialog\(\);\s*\n\s*onDelete\(value\)/);
+    assert.match(app, /confirmDeleteFeedFromManagement\(value\)/);
+    assert.match(app, /openConfirmDialog\(\{[\s\S]*?tone: 'danger'/);
 });
 
 test('le lecteur structure le texte en paragraphes sans injecter de HTML', () => {

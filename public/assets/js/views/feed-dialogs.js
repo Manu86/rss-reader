@@ -524,7 +524,7 @@ export function openAddFeedDialog({ discover, createFeed, categories = [], onCre
     showUrlStep();
 }
 
-export function openFeedEditorDialog({ feed, categories = [], onSave } = {}) {
+export function openFeedEditorDialog({ feed, categories = [], onSave, onDelete } = {}) {
     const feedValue = dataValue(feed);
     const value = feedValue !== null
         && typeof feedValue === 'object'
@@ -596,14 +596,27 @@ export function openFeedEditorDialog({ feed, categories = [], onSave } = {}) {
         hidden: true,
     }));
     form.appendChild(messageNode());
-    form.appendChild(actionRow([
+    const actions = [
         button('Annuler', { onClick: () => closeDialog() }),
         button('Enregistrer', {
             type: 'submit',
             className: 'button button-primary',
             icon: 'check',
         }),
-    ]));
+    ];
+    // La suppression est une action destructrice : elle passe par la
+    // confirmation dédiée et quitte la modale d'édition avant de s'ouvrir.
+    if (typeof onDelete === 'function') {
+        actions.unshift(button('Supprimer le flux', {
+            className: 'button button-danger',
+            icon: 'trash',
+            onClick: () => {
+                closeDialog();
+                onDelete(value);
+            },
+        }));
+    }
+    form.appendChild(actionRow(actions));
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();

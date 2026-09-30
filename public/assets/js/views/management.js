@@ -10,7 +10,7 @@ import {
     setChildren,
     spinnerBlock,
     stateBlock,
-} from './feed-dialogs.js';
+} from './feed-dialogs.js?v=2';
 
 let managementSequence = 0;
 

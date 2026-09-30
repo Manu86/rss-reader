@@ -8,7 +8,7 @@ import {
     icon,
     setChildren,
     spinnerBlock,
-} from './feed-dialogs.js';
+} from './feed-dialogs.js?v=2';
 
 const MAX_OPML_BYTES = 1048576;
 let settingsSequence = 0;

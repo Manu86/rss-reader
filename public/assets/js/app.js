@@ -1,9 +1,9 @@
 import { ApiError, NetworkError, createApiClient } from './api/client.js?v=3';
 import { closeDialog } from './components/dialog.js';
 import { showToast } from './components/feedback.js';
-import { ManagementView } from './views/management.js?v=4';
-import { SettingsView } from './views/settings.js?v=8';
-import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js';
+import { ManagementView } from './views/management.js?v=5';
+import { SettingsView } from './views/settings.js?v=9';
+import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js?v=2';
 import { createLoginView } from './views/login.js';
 import { ArticlesView } from './views/articles.js?v=30';
 import { ReaderView } from './views/reader.js?v=41';
@@ -760,6 +760,36 @@ function confirmDeleteFeedFromArticles(feedId) {
     });
 }
 
+function confirmDeleteFeedFromManagement(feed) {
+    const id = Number(feed?.id);
+    if (!Number.isSafeInteger(id) || id < 1) {
+        return;
+    }
+    const name = feed?.name || 'ce flux';
+    openConfirmDialog({
+        title: 'Supprimer le flux',
+        message: `Le flux « ${name} », ses articles et ses médias associés seront supprimés définitivement. Voulez-vous continuer ?`,
+        confirmLabel: 'Supprimer le flux',
+        tone: 'danger',
+        onConfirm: async () => {
+            await app.api.deleteFeed(id);
+            await loadShell();
+            // Le lecteur peut afficher un article du flux supprimé, ou la
+            // liste peut être celle du flux : on revient à l'accueil plutôt
+            // que de laisser un écran erroné.
+            if (app.route?.name === 'article'
+                || (app.route?.name === 'feed' && Number(app.route.params.id) === id)) {
+                app.articleListRouteUrl = null;
+                invalidateReader();
+                app.readerView.renderPlaceholder();
+                window.location.hash = '#/';
+                return;
+            }
+            await refreshCurrentView();
+        },
+    });
+}
+
 function editFeedFromArticles(feedId) {
     const feed = app.feeds.find((value) => Number(value.id) === Number(feedId));
     if (!feed) return;
@@ -770,6 +800,7 @@ function editFeedFromArticles(feedId) {
             await app.api.updateFeed(feed.id, changes);
             await refreshCurrentView();
         },
+        onDelete: (value) => confirmDeleteFeedFromManagement(value),
     });
 }
 
@@ -803,7 +834,12 @@ function openManagement() {
         onRefreshAll: async () => { await app.api.refreshAllFeeds(); await refreshCurrentView(); },
         onRefreshFeed: async (id) => { await app.api.refreshFeed(id); await refreshCurrentView(); },
         onToggleFeed: async (id, active) => { await app.api.updateFeed(id, { is_active: active }); await refreshCurrentView(); },
-        onEditFeed: (feed) => openFeedEditorDialog({ feed, categories: app.categories, onSave: async (changes) => { await app.api.updateFeed(feed.id, changes); await refreshCurrentView(); } }),
+        onEditFeed: (feed) => openFeedEditorDialog({
+            feed,
+            categories: app.categories,
+            onSave: async (changes) => { await app.api.updateFeed(feed.id, changes); await refreshCurrentView(); },
+            onDelete: (value) => confirmDeleteFeedFromManagement(feed),
+        }),
         onDeleteFeed: async (feed) => { await app.api.deleteFeed(feed.id); await refreshCurrentView(); },
         onAddCategory: () => openCategoryDialog({ onSave: async (category) => { await app.api.createCategory(category); await refreshCurrentView(); } }),
         onEditCategory: (category) => openCategoryDialog({ category, onSave: async (changes) => { await app.api.updateCategory(category.id, changes); await refreshCurrentView(); } }),
