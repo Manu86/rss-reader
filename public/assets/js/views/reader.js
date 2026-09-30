@@ -625,7 +625,64 @@ const SHARE_NETWORKS = [
         intent: (title, url) => `https://bsky.app/intent/compose?text=${encodeShareText(title === '' ? url : `${title}\n${url}`)}`,
         label: 'Partager sur Bluesky',
     },
+    {
+        name: 'E-mail',
+        kind: 'email',
+        intent: (title, url, article) => `mailto:?subject=${encodeShareText(shareEmailSubject(title))}&body=${encodeShareText(shareEmailBody(title, url, article))}`,
+        label: 'Partager par e-mail',
+    },
 ];
+
+/** Sujet du partage e-mail : l'application est identifiée d'emblée. */
+function shareEmailSubject(title) {
+    return `RSS Reader : ${title}`;
+}
+
+/**
+ * Corps du partage e-mail : un mot d'introduction, puis toutes les
+ * données de l'article — titre, auteur, source, date, extrait du résumé
+ * et le lien d'origine. Un corps mailto est toujours rendu en texte brut
+ * par les clients mail (Thunderbird compris) : le HTML y est affiché tel
+ * quel, seuls le texte et l'URL explicite restent exploitables.
+ */
+function shareEmailBody(title, url, article) {
+    return [
+        'Bonjour,',
+        '',
+        'L’article ci-dessous pourrait vous intéresser.',
+        '',
+        title,
+        '',
+        shareEmailContext(article),
+        '',
+        visibleText(articleSummary(article)),
+        '',
+        `Consulter l’article : ${url}`,
+    ].join('\n');
+}
+
+function shareEmailContext(article) {
+    if (!isObject(article)) {
+        return '';
+    }
+    const parts = [];
+    const author = nonEmpty(article.author) ? textValue(article.author).trim() : '';
+    const feedName = isObject(article.feed) && nonEmpty(article.feed.name)
+        ? textValue(article.feed.name).trim()
+        : '';
+    if (author !== '' && feedName !== '') {
+        parts.push(`${author} — ${feedName}`);
+    } else if (author !== '') {
+        parts.push(author);
+    } else if (feedName !== '') {
+        parts.push(feedName);
+    }
+    const date = articleDate(article);
+    if (date.raw !== null) {
+        parts.push(date.label);
+    }
+    return parts.join(', ');
+}
 
 function encodeShareText(value) {
     return encodeURIComponent(textValue(value));
@@ -638,7 +695,7 @@ function ensureShareUrl(url) {
     return encodeURIComponent(absolute.toString());
 }
 
-function shareQuery(article) {
+export function shareQuery(article) {
     const url = originalArticleUrl(article);
     if (url === null) {
         return null;
@@ -646,21 +703,27 @@ function shareQuery(article) {
     return {
         url,
         title: articleTitle(article),
+        article,
     };
 }
 
+/** Réseaux de partage exposés pour les tests et le rendu. */
+export function shareNetworks() {
+    return SHARE_NETWORKS;
+}
+
 function renderShareLink(network, share) {
+    const isEmail = network.kind === 'email';
     return viewEl('a', {
         className: 'button reader-share-link',
         attrs: {
-            href: network.intent(share.title, share.url),
-            target: '_blank',
-            rel: 'noopener noreferrer',
+            href: network.intent(share.title, share.url, share.article),
+            ...(isEmail ? {} : { target: '_blank', rel: 'noopener noreferrer' }),
             'aria-label': network.label,
             title: network.label,
         },
     }, [
-        viewIcon('share', 'reader-share-icon'),
+        viewIcon(isEmail ? 'mail' : 'share', 'reader-share-icon'),
         viewEl('span', { className: 'button-label', text: network.name }),
     ]);
 }
@@ -773,6 +836,32 @@ function renderFavoriteButton(article, callback) {
             title: label,
         },
         onClick: () => invokeToggle(callback, article, !favorite),
+    });
+}
+
+/**
+ * L'impression s'appuie sur la feuille @media print : header, navigation
+ * et actions y sont retirés, seul le corps de l'article reste imprimé.
+ */
+function renderPrintButton(article) {
+    return viewButton('Imprimer', {
+        className: 'reader-action-button reader-print',
+        icon: 'download',
+        attrs: {
+            'aria-label': 'Imprimer l’article',
+            title: 'Imprimer l’article',
+        },
+        onClick: () => {
+            // L'entête d'impression des navigateurs mobiles reprend le titre
+            // de l'onglet : le figer sur l'article évite d'imprimer un
+            // bandeau d'attente à sa place.
+            if (typeof document !== 'undefined') {
+                document.title = `RSS Reader : ${articleTitle(article)}`;
+            }
+            if (typeof window !== 'undefined' && typeof window.print === 'function') {
+                window.print();
+            }
+        },
     });
 }
 
@@ -1037,6 +1126,7 @@ export class ReaderView {
             viewEl('div', { className: 'reader-actions' }, [
                 renderFavoriteButton(article, this.callbacks.onToggleFavorite),
                 renderReadButton(article, this.callbacks.onToggleRead),
+                renderPrintButton(article),
             ]),
         ].filter(Boolean);
         const image = createArticleImage(article);

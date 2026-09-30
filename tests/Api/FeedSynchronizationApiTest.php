@@ -621,6 +621,46 @@ XML;
         );
     }
 
+    /**
+     * Le résumé des flux SPIP embarque la vignette déclarée en
+     * media:content : la répétition est retirée du résumé comme du contenu,
+     * la couverture restant la seule occurrence du visuel.
+     */
+    public function testFeedCoverIsNotRepeatedInsideItsOwnSummary(): void
+    {
+        $feed = '<?xml version="1.0"?><rss version="2.0" '
+            . 'xmlns:media="http://search.yahoo.com/mrss/"><channel>'
+            . '<title>Titre du flux</title><link>https://site.test/</link>'
+            . '<item><guid>summary-dup-1</guid><title>Résumé doublé</title>'
+            . '<link>https://site.test/articles/summary-dup-1</link>'
+            . '<media:content url="https://site.test/photos/couverture.png" medium="image"/>'
+            . '<description><![CDATA[<p>%s</p>'
+            . '<img src="https://site.test/photos/couverture.png"><img src="https://site.test/photos/annexe-2.png">]]></description>'
+            . '</item></channel></rss>';
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], sprintf($feed, str_repeat('Résumé du flux. ', 20))),
+            new TransportResponse(200, ['content-type' => 'image/png'], $this->png(320, 240)),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+
+        $created = $this->createFeed($kernel, $csrf, 'https://feeds.test/summary-dup.xml', null);
+        self::assertSame(201, $created->status);
+        $feedId = $this->decode($created)['data']['id'];
+        self::assertIsInt($feedId);
+
+        $article = $this->articles($feedId)[0];
+        self::assertIsString($article['image_path']);
+        self::assertStringContainsString('Résumé du flux.', (string) $article['summary']);
+        self::assertStringContainsString(
+            'https://site.test/photos/annexe-2.png',
+            (string) $article['summary'],
+        );
+        self::assertStringNotContainsString(
+            'https://site.test/photos/couverture.png',
+            (string) $article['summary'],
+        );
+    }
+
     private function png(int $width = 1, int $height = 1): string
     {
         if ($width === 1 && $height === 1) {

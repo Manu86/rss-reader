@@ -426,3 +426,35 @@ a.reader-source-link:hover .reader-source-name { color: var(--accent); }
 [data-theme="dark"] ::-webkit-scrollbar-track { background: var(--soft); }
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #4a5866; border-radius: .5rem; border: 2px solid var(--soft); }
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #5d6e80; }
+
+/* Impression de l’article : seule la lecture reste sur papier. */
+@media print {
+    .app-header, .sidebar, .navigation-backdrop, .article-list-pane, .utility-pane,
+    .reader-actions, .reader-share, .reader-external-link, .reader-footer,
+    .reader-back-button, .reader-navigation-button, .reader-print, .skip-link { display: none !important; }
+    /* Aucun état de chargement ne peut atteindre le papier : c'est le seul
+       contenu rendu qui s'imprime, jamais le placeholder du lecteur ni les
+       bandeaux d'attente. */
+    .reader-placeholder, .state-block, .inline-status, .spinner { display: none !important; }
+    html, body, .app-layout, .reading-layout, .reader-pane, .reader-content,
+    .reader-body, .reader-header { height: auto !important; min-height: 0 !important; max-width: 100% !important; overflow: visible !important; }
+    .reading-layout, .reader-pane { display: block !important; }
+    /* Marges de page confortables et encre noire, quel que soit le thème. */
+    @page { margin: 2.2cm 1.8cm; }
+    .reader-pane { background: #fff !important; padding: 0 !important; }
+    .reader-content { max-width: none !important; margin: 0 !important; }
+    /* Papier = encre noire, quel que soit le thème d'affichage. */
+    html, body, .reader-pane, .reader-title, .reader-source-name, .reader-author,
+    .reader-date, .reader-content, .reader-article-content {
+        color: #000 !important;
+    }
+    /* Le corps s'imprime en taille lecture, pas en taille écran agrandie. */
+    .reader-article-content { font-size: 11pt !important; line-height: 1.5 !important; }
+    .reader-title { color: #000 !important; font-size: 1.35rem !important; }
+    .reader-article-content a { color: #000 !important; text-decoration: underline; }
+    .reader-article-content img { max-width: 100% !important; page-break-inside: avoid; }
+    .reader-article-content pre, .reader-article-content blockquote, .reader-article-content table,
+    .reader-article-content details { page-break-inside: avoid; }
+    .reader-article-content h2, .reader-article-content h3 { page-break-after: avoid; }
+    a.reader-source-link { text-decoration: none; }
+}

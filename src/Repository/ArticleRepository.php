@@ -341,12 +341,34 @@ final readonly class ArticleRepository
         return $statement->rowCount() === 1;
     }
 
-    /** @return list<array{id: int, user_id: int, image_path: string, content: string}> */
+    public function replaceSummary(int $articleId, int $userId, string $summary, string $now): bool
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE articles SET summary = :summary, updated_at = :updated_at '
+            . 'WHERE id = :id AND user_id = :user_id'
+        );
+        $statement->execute([
+            'summary' => $summary,
+            'updated_at' => $now,
+            'id' => $articleId,
+            'user_id' => $userId,
+        ]);
+
+        return $statement->rowCount() === 1;
+    }
+
+    /**
+     * Articles dont la couverture stockée peut être répétée dans le résumé
+     * ou le contenu : le résumé des flux SPIP embarque la vignette déclarée
+     * en media:content, le contenu celle de la page.
+     *
+     * @return list<array{id: int, user_id: int, image_path: string, summary: string|null, content: string|null}>
+     */
     public function duplicateCoverCandidates(): array
     {
         $statement = $this->pdo->query(
-            "SELECT id, user_id, image_path, content FROM articles "
-            . "WHERE image_path IS NOT NULL AND content LIKE '%<img%' "
+            "SELECT id, user_id, image_path, summary, content FROM articles "
+            . "WHERE image_path IS NOT NULL AND (summary LIKE '%<img%' OR content LIKE '%<img%') "
             . 'ORDER BY user_id, feed_id, id'
         );
         if ($statement === false) {
@@ -354,14 +376,20 @@ final readonly class ArticleRepository
         }
         $candidates = [];
         foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            if (!is_array($row) || !is_string($row['image_path']) || !is_string($row['content'])) {
+            if (!is_array($row) || !is_string($row['image_path'])) {
+                continue;
+            }
+            $summary = is_string($row['summary']) && $row['summary'] !== '' ? $row['summary'] : null;
+            $content = is_string($row['content']) && $row['content'] !== '' ? $row['content'] : null;
+            if ($summary === null && $content === null) {
                 continue;
             }
             $candidates[] = [
                 'id' => (int) $row['id'],
                 'user_id' => (int) $row['user_id'],
                 'image_path' => $row['image_path'],
-                'content' => $row['content'],
+                'summary' => $summary,
+                'content' => $content,
             ];
         }
 
@@ -388,6 +416,17 @@ final readonly class ArticleRepository
         $content = $statement->fetchColumn();
 
         return is_string($content) && $content !== '' ? $content : null;
+    }
+
+    public function findSummaryOwned(int $articleId, int $userId): ?string
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT summary FROM articles WHERE id = :id AND user_id = :user_id'
+        );
+        $statement->execute(['id' => $articleId, 'user_id' => $userId]);
+        $summary = $statement->fetchColumn();
+
+        return is_string($summary) && $summary !== '' ? $summary : null;
     }
 
     /** @return list<Article> */

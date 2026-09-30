@@ -436,3 +436,41 @@ test('le retour depuis le lecteur restaure la position de la liste', () => {
     // Une nouvelle liste en cours de chargement annule la restauration.
     assert.match(articles, /renderLoading\(options = \{\}\) \{[\s\S]*?pendingScrollRestore = null/);
 });
+
+test('le lecteur propose l’impression de l’article avec des styles dédiés', () => {
+    const reader = read('assets/js/views/reader.js');
+    const css = read('assets/css/app.css');
+
+    // Le bouton Imprimer déclenche l’impression native, sans appel réseau.
+    assert.match(reader, /renderPrintButton\(article\)/);
+    assert.match(reader, /className: 'reader-action-button reader-print'/);
+    assert.match(reader, /'aria-label': 'Imprimer l’article'/);
+    assert.match(reader, /window\.print\(\)/);
+
+    // À l’impression, seuls le titre, la source et le corps restent :
+    // navigation, actions, partage et pied sont retirés du papier.
+    assert.match(css, /@media print \{/);
+    assert.match(css, /\.app-header, \.sidebar, \.navigation-backdrop, \.article-list-pane, \.utility-pane,.*\n[^}]*display: none !important/);
+    assert.match(css, /\.reader-actions, \.reader-share, \.reader-external-link, \.reader-footer,/);
+    assert.match(
+        css,
+        /\.reader-back-button, \.reader-navigation-button, \.reader-print, \.skip-link \{ display: none !important; \}/,
+        'les boutons retour, précédent, suivant, imprimer et le lien d’évitement sont absents du papier',
+    );
+    assert.match(css, /\.reader-pane \{ background: #fff !important; padding: 0 !important; \}/);
+    assert.match(css, /@page \{ margin: 2\.2cm 1\.8cm; \}/, 'les marges de page haute et basse sont confortables');
+    assert.match(
+        css,
+        /\.reader-article-content \{ font-size: 11pt !important; line-height: 1\.5 !important; \}/,
+        'le corps s’imprime en taille lecture, pas en taille écran',
+    );
+    assert.match(css, /\.reader-title \{ color: #000 !important/, 'le titre s’imprime en noir, même depuis le thème sombre');
+    assert.match(css, /\.reader-article-content a \{ color: #000 !important; text-decoration: underline; \}/);
+    assert.match(
+        css,
+        /\.reader-placeholder, \.state-block, \.inline-status, \.spinner \{ display: none !important; \}/,
+        'aucun état de chargement n’atteint le papier',
+    );
+    assert.match(reader, /document\.title = `RSS Reader : \$\{articleTitle\(article\)\}`/, 'l’entête d’impression porte le titre de l’article');
+    assert.match(css, /\.reader-article-content img \{[^}]*page-break-inside: avoid/);
+});

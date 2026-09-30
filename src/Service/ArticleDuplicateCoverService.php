@@ -34,24 +34,42 @@ final readonly class ArticleDuplicateCoverService
             if ($cover === null) {
                 continue;
             }
-            $sources = $this->duplicates->imageSources((string) $candidate['content']);
-            if ($sources === []) {
-                continue;
+            $cleanedNow = false;
+            foreach (['summary', 'content'] as $field) {
+                $html = $candidate[$field];
+                if (!is_string($html) || $html === '') {
+                    continue;
+                }
+                $sources = $this->duplicates->imageSources($html);
+                if ($sources === []) {
+                    continue;
+                }
+                $duplicates = $this->duplicates->sourcesMatchingMedia($userId, $cover, $sources);
+                if ($duplicates === []) {
+                    continue;
+                }
+                $cleanedHtml = $this->duplicates->stripSources($html, $duplicates);
+                if ($cleanedHtml === $html) {
+                    continue;
+                }
+                $replaced = $field === 'summary'
+                    ? $this->articles->replaceSummary(
+                        (int) $candidate['id'],
+                        $userId,
+                        $cleanedHtml,
+                        $this->clock->now()->format('Y-m-d\TH:i:s\Z'),
+                    )
+                    : $this->articles->replaceContent(
+                        (int) $candidate['id'],
+                        $userId,
+                        $cleanedHtml,
+                        $this->clock->now()->format('Y-m-d\TH:i:s\Z'),
+                    );
+                if ($replaced) {
+                    $cleanedNow = true;
+                }
             }
-            $duplicates = $this->duplicates->sourcesMatchingMedia($userId, $cover, $sources);
-            if ($duplicates === []) {
-                continue;
-            }
-            $cleanedContent = $this->duplicates->stripSources((string) $candidate['content'], $duplicates);
-            if ($cleanedContent === (string) $candidate['content']) {
-                continue;
-            }
-            if ($this->articles->replaceContent(
-                (int) $candidate['id'],
-                $userId,
-                $cleanedContent,
-                $this->clock->now()->format('Y-m-d\TH:i:s\Z'),
-            )) {
+            if ($cleanedNow) {
                 ++$cleaned;
             }
         }

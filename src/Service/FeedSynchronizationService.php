@@ -276,9 +276,11 @@ final readonly class FeedSynchronizationService implements FeedRefresher
     }
 
     /**
-     * Le visuel du flux n'est pas répété dans le contenu du même article :
-     * le contenu de flux qui l'embarque est nettoyé après le téléchargement
-     * du visuel, sans changer sa source ni les marques de vérification.
+     * Le visuel du flux n'est ni répété dans le contenu ni dans le résumé
+     * du même article — le résumé des flux SPIP embarque la vignette
+     * déclarée en media:content : les deux sont nettoyés après le
+     * téléchargement du visuel, sans changer sa source ni les marques de
+     * vérification.
      */
     private function removeInvisibleCoverRepetition(
         int $userId,
@@ -286,20 +288,29 @@ final readonly class FeedSynchronizationService implements FeedRefresher
         string $coverUrl,
         string $now,
     ): void {
-        $content = $this->articles->findContentOwned($articleId, $userId);
-        if ($content === null) {
-            return;
-        }
-        $duplicates = $this->duplicates->sourcesMatchingUrl(
-            $coverUrl,
-            $this->duplicates->imageSources($content),
-        );
-        if ($duplicates === []) {
-            return;
-        }
-        $cleaned = $this->duplicates->stripSources($content, $duplicates);
-        if ($cleaned !== $content) {
-            $this->articles->replaceContent($articleId, $userId, $cleaned, $now);
+        foreach (['content', 'summary'] as $field) {
+            $html = $field === 'content'
+                ? $this->articles->findContentOwned($articleId, $userId)
+                : $this->articles->findSummaryOwned($articleId, $userId);
+            if ($html === null) {
+                continue;
+            }
+            $duplicates = $this->duplicates->sourcesMatchingUrl(
+                $coverUrl,
+                $this->duplicates->imageSources($html),
+            );
+            if ($duplicates === []) {
+                continue;
+            }
+            $cleaned = $this->duplicates->stripSources($html, $duplicates);
+            if ($cleaned === $html) {
+                continue;
+            }
+            if ($field === 'content') {
+                $this->articles->replaceContent($articleId, $userId, $cleaned, $now);
+            } else {
+                $this->articles->replaceSummary($articleId, $userId, $cleaned, $now);
+            }
         }
     }
 
