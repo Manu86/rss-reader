@@ -153,6 +153,155 @@ final class FeedParserTest extends TestCase
         self::assertSame('https://feeds.test/images/atom.jpg', $atom->articles[0]->imageUrl);
     }
 
+    public function testVideoMediaContentDoesNotMaskMediaThumbnail(): void
+    {
+        $xml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">
+  <title>Contexte YouTube</title>
+  <link rel="alternate" href="https://www.youtube.com/channel/UC123"/>
+  <entry>
+    <id>yt:video:AbCdEf12345</id>
+    <title>Video de test</title>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=AbCdEf12345"/>
+    <media:group>
+      <media:title>Video de test</media:title>
+      <media:content url="https://www.youtube.com/v/AbCdEf12345?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+      <media:thumbnail url="https://i.ytimg.com/vi/AbCdEf12345/hqdefault.jpg" width="480" height="360"/>
+    </media:group>
+  </entry>
+</feed>
+XML;
+
+        $feed = $this->parser->parse($xml, 'https://www.youtube.com/feeds/videos.xml?channel_id=UC123');
+
+        self::assertNotNull($feed);
+        self::assertSame('https://i.ytimg.com/vi/AbCdEf12345/hqdefault.jpg', $feed->articles[0]->imageUrl);
+    }
+
+    public function testImageMediaContentWithoutMediumIsStillSelected(): void
+    {
+        $xml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Journal</title>
+    <item>
+      <guid>media-content-image-1</guid>
+      <title>Article image</title>
+      <link>https://site.test/articles/1</link>
+      <media:content url="https://cdn.test/images/cover.jpg" type="image/jpeg"/>
+      <media:thumbnail url="https://cdn.test/images/thumb.jpg"/>
+    </item>
+    <item>
+      <guid>media-content-video-2</guid>
+      <title>Article video</title>
+      <link>https://site.test/articles/2</link>
+      <media:content url="https://cdn.test/videos/clip.mp4" medium="video" type="video/mp4"/>
+      <media:thumbnail url="https://cdn.test/images/poster.jpg"/>
+    </item>
+  </channel>
+</rss>
+XML;
+
+        $feed = $this->parser->parse($xml, 'https://feeds.test/rss.xml');
+
+        self::assertNotNull($feed);
+        self::assertSame('https://cdn.test/images/cover.jpg', $feed->articles[0]->imageUrl);
+        self::assertSame('https://cdn.test/images/poster.jpg', $feed->articles[1]->imageUrl);
+    }
+
+    public function testItunesImagePodcastCoverIsUsedAsImageCandidate(): void
+    {
+        $xml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
+  <channel>
+    <title>Affaires étrangères</title>
+    <link>https://www.radiofrance.fr/</link>
+    <item>
+      <guid>podcast-1</guid>
+      <title>Épisode 1</title>
+      <link>https://www.radiofrance.fr/</link>
+      <itunes:image href="https://cdn.test/podcasts/episode-1.jpg"/>
+    </item>
+    <item>
+      <guid>podcast-2</guid>
+      <title>Épisode 2 sans visuel</title>
+      <link>https://www.radiofrance.fr/</link>
+    </item>
+  </channel>
+</rss>
+XML;
+
+        $feed = $this->parser->parse($xml, 'https://feeds.test/podcast.xml');
+
+        self::assertNotNull($feed);
+        self::assertSame('https://cdn.test/podcasts/episode-1.jpg', $feed->articles[0]->imageUrl);
+        self::assertNull($feed->articles[1]->imageUrl);
+    }
+
+    public function testRssChannelImageIsStillAFaviconAndNotAnArticleCover(): void
+    {
+        $xml = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Journal</title>
+    <image>
+      <url>https://cdn.test/channel-cover.jpg</url>
+      <title>Journal</title>
+    </image>
+    <item>
+      <guid>channel-1</guid>
+      <title>Article 1</title>
+      <link>https://site.test/articles/1</link>
+    </item>
+  </channel>
+</rss>
+XML;
+
+        $feed = $this->parser->parse($xml, 'https://feeds.test/rss.xml');
+
+        self::assertNotNull($feed);
+        self::assertSame('https://cdn.test/channel-cover.jpg', $feed->faviconUrl);
+        self::assertNull($feed->articles[0]->imageUrl);
+    }
+
+    public function testRssDublinCoreDateIsUsedAsPublicationDate(): void
+    {
+        $xml = '<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            . '<channel><title>Journal</title><item><title>Article</title>'
+            . '<link>https://site.test/article</link>'
+            . '<dc:date>2026-09-30T09:05:13Z</dc:date>'
+            . '</item></channel></rss>';
+
+        $feed = $this->parser->parse($xml, 'https://feeds.test/rss.xml');
+
+        self::assertNotNull($feed);
+        self::assertSame('2026-09-30T09:05:13Z', $feed->articles[0]->publishedAt);
+    }
+
+    public function testLocalizedFrenchPublicationDateIsParsed(): void
+    {
+        $cases = [
+            'Vendredi 25 septembre 2026 - 12:00' => '2026-09-25T12:00:00Z',
+            '1er mars 2026 10:30' => '2026-03-01T10:30:00Z',
+            'Lundi 1er septembre 2026 à 08:45' => '2026-09-01T08:45:00Z',
+        ];
+        foreach ($cases as $raw => $expected) {
+            $xml = '<rss version="2.0"><channel><title>Journal</title>'
+                . '<item><title>Article</title><link>https://site.test/article</link>'
+                . '<pubDate>' . htmlspecialchars($raw) . '</pubDate>'
+                . '</item></channel></rss>';
+
+            $feed = $this->parser->parse($xml, 'https://feeds.test/rss.xml');
+
+            self::assertNotNull($feed);
+            self::assertSame($expected, $feed->articles[0]->publishedAt, "date : $raw");
+        }
+    }
+
     private function fixture(string $name): string
     {
         $content = file_get_contents(dirname(__DIR__) . '/Fixtures/Feeds/' . $name);

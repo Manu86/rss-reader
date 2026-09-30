@@ -173,6 +173,7 @@ final readonly class SymfonyRecommendationDigestMailer implements Recommendation
             }
             $bytes = strlen($media->content);
             if ((int) ceil(($totalBytes + $bytes) * 4 / 3) > self::MAX_INLINE_IMAGE_MIME_BYTES) {
+                $names[$article->id] = self::DEFAULT_RSS_IMAGE_NAME;
                 continue;
             }
             $name = 'recommendation-' . $article->id . '.' . $this->imageExtension($media->contentType);

@@ -29,6 +29,7 @@ final readonly class FeedSynchronizationService implements FeedRefresher
         private Clock $clock,
         private RemoteMediaService $media,
         private ArticlePageService $articlePages,
+        private ArticleCoverDeduplicator $duplicates,
         private FeedRefreshLock $locks,
     ) {}
 
@@ -177,14 +178,20 @@ final readonly class FeedSynchronizationService implements FeedRefresher
             }
         }
 
+        $storedFeedCoverUrls = [];
         foreach ($inserted->mediaCandidates as $candidate) {
             try {
                 if ($candidate['image_url'] === null) {
                     continue;
                 }
                 $key = $this->media->download($feed->userId, $candidate['image_url']);
-                if (!$this->articles->setImagePath($candidate['id'], $feed->userId, $key, $now)) {
+                $stored = $this->articles->setImagePath($candidate['id'], $feed->userId, $key, $now);
+                if (!$stored) {
                     $this->media->discard($feed->userId, $key);
+                }
+                if ($stored) {
+                    $storedFeedCoverUrls[$candidate['id']] = $candidate['image_url'];
+                    $this->removeInvisibleCoverRepetition($feed->userId, $candidate['id'], $candidate['image_url'], $now);
                 }
             } catch (Throwable) {
                 error_log(sprintf(
@@ -199,20 +206,18 @@ final readonly class FeedSynchronizationService implements FeedRefresher
         foreach (array_slice($inserted->pageCandidates, 0, self::MAX_ARTICLE_PAGES_PER_SYNCHRONIZATION) as $candidate) {
             try {
                 $page = $this->articlePages->fetch($candidate['article_url']);
-                if ($candidate['content_fallback']) {
-                    if ($page->content === null) {
-                        $this->articles->markPageContentChecked($candidate['id'], $feed->userId, $now);
-                    } else {
-                        $this->articles->setPageContent($candidate['id'], $feed->userId, $page->content, $now);
-                    }
-                }
+                $duplicates = [];
                 if ($candidate['image_fallback']) {
                     $this->articles->markImageMetadataChecked($candidate['id'], $feed->userId, $now);
                     try {
-                        $key = $this->media->downloadFirst($feed->userId, $page->imageCandidates);
-                        if (!$this->articles->setImagePath($candidate['id'], $feed->userId, $key, $now)) {
-                            $this->media->discard($feed->userId, $key);
+                        $cover = $this->media->downloadFirst($feed->userId, $page->imageCandidates);
+                        if (!$this->articles->setImagePath($candidate['id'], $feed->userId, $cover['key'], $now)) {
+                            $this->media->discard($feed->userId, $cover['key']);
                         }
+                        $duplicates = $this->duplicates->sourcesMatchingUrl(
+                            $cover['url'],
+                            $page->content === null ? [] : $this->duplicates->imageSources($page->content),
+                        );
                     } catch (Throwable) {
                         error_log(sprintf(
                             'Article image import failed [user:%d feed:%d article:%d]',
@@ -220,6 +225,25 @@ final readonly class FeedSynchronizationService implements FeedRefresher
                             $feed->id,
                             $candidate['id'],
                         ));
+                    }
+                }
+                $feedCoverUrl = $storedFeedCoverUrls[$candidate['id']] ?? null;
+                if ($feedCoverUrl !== null) {
+                    $duplicates = array_merge($duplicates, $this->duplicates->sourcesMatchingUrl(
+                        $feedCoverUrl,
+                        $page->content === null ? [] : $this->duplicates->imageSources($page->content),
+                    ));
+                }
+                if ($candidate['content_fallback']) {
+                    if ($page->content === null) {
+                        $this->articles->markPageContentChecked($candidate['id'], $feed->userId, $now);
+                    } else {
+                        $this->articles->setPageContent(
+                            $candidate['id'],
+                            $feed->userId,
+                            $this->duplicates->stripSources($page->content, $duplicates),
+                            $now,
+                        );
                     }
                 }
             } catch (Throwable) {
@@ -230,6 +254,34 @@ final readonly class FeedSynchronizationService implements FeedRefresher
                     $candidate['id'],
                 ));
             }
+        }
+    }
+
+    /**
+     * Le visuel du flux n'est pas répété dans le contenu du même article :
+     * le contenu de flux qui l'embarque est nettoyé après le téléchargement
+     * du visuel, sans changer sa source ni les marques de vérification.
+     */
+    private function removeInvisibleCoverRepetition(
+        int $userId,
+        int $articleId,
+        string $coverUrl,
+        string $now,
+    ): void {
+        $content = $this->articles->findContentOwned($articleId, $userId);
+        if ($content === null) {
+            return;
+        }
+        $duplicates = $this->duplicates->sourcesMatchingUrl(
+            $coverUrl,
+            $this->duplicates->imageSources($content),
+        );
+        if ($duplicates === []) {
+            return;
+        }
+        $cleaned = $this->duplicates->stripSources($content, $duplicates);
+        if ($cleaned !== $content) {
+            $this->articles->replaceContent($articleId, $userId, $cleaned, $now);
         }
     }
 

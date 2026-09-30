@@ -9,6 +9,7 @@ use App\Exception\ValidationException;
 use App\Repository\ArticleRepository;
 use App\Repository\UserRepository;
 use App\Service\ArticleContentEnrichmentService;
+use App\Service\ArticleDuplicateCoverService;
 use App\Service\ArticleRetentionService;
 use App\Service\AutomaticFeedRefreshService;
 use App\Service\InstallationService;
@@ -30,6 +31,7 @@ final readonly class ConsoleApplication
         private ProcessLock $maintenanceLock,
         private ArticleRepository $articles,
         private ArticleContentEnrichmentService $articleContentEnrichment,
+        private ArticleDuplicateCoverService $duplicateCovers,
     ) {}
 
     /** @param list<string> $arguments */
@@ -48,6 +50,7 @@ final readonly class ConsoleApplication
                 'feeds:refresh' => $this->refreshFeeds(),
                 'articles:cleanup' => $this->cleanupArticles(),
                 'articles:enrich-content' => $this->enrichArticleContent(),
+                'articles:remove-duplicate-covers' => $this->removeDuplicateCovers(),
                 'fts:rebuild' => $this->rebuildSearchIndex(),
                 'help', '--help', '-h' => $this->help(),
                 default => $this->unknownCommand($command),
@@ -190,6 +193,7 @@ Commandes disponibles :
   feeds:refresh
   articles:cleanup
   articles:enrich-content
+  articles:remove-duplicate-covers
   fts:rebuild
 HELP
         );
@@ -304,6 +308,29 @@ HELP
         ));
 
         return $summary['failed'] === 0 ? 0 : 1;
+    }
+
+    private function removeDuplicateCovers(): int
+    {
+        if (!$this->maintenanceLock->acquire()) {
+            fwrite(STDERR, 'Une tâche de maintenance est déjà en cours.' . PHP_EOL);
+
+            return 75;
+        }
+
+        try {
+            $summary = $this->duplicateCovers->cleanup();
+        } finally {
+            $this->maintenanceLock->release();
+        }
+        fwrite(STDOUT, sprintf(
+            'Déduplication terminée : %d article(s) vérifié(s), %d contenu(s) nettoyé(s).%s',
+            $summary['checked'],
+            $summary['cleaned'],
+            PHP_EOL,
+        ));
+
+        return 0;
     }
 
     private function unknownCommand(string $command): int

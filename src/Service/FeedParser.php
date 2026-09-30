@@ -96,7 +96,8 @@ final readonly class FeedParser
         $author = $this->plainText(
             $this->childText($item, 'author') ?? $this->childText($item, 'creator'),
         );
-        $publishedAt = $this->date($this->childText($item, 'pubDate'));
+        $publishedAt = $this->date($this->childText($item, 'pubDate'))
+            ?? $this->date($this->childText($item, 'date'));
         $contentBaseUrl = $url ?? $documentUrl;
         $summary = $this->sanitizeArticleMarkup($this->childMarkup($item, 'description'), $contentBaseUrl);
         $content = $this->sanitizeArticleMarkup($this->childMarkup($item, 'encoded'), $contentBaseUrl);
@@ -282,6 +283,10 @@ final readonly class FeedParser
         if ($candidate !== null) {
             return $candidate;
         }
+        $candidate = $this->itunesImage($item, $documentUrl);
+        if ($candidate !== null) {
+            return $candidate;
+        }
         foreach ($this->children($item, 'enclosure') as $enclosure) {
             if (str_starts_with(strtolower(trim($enclosure->getAttribute('type'))), 'image/')) {
                 $candidate = $this->normalizeUrl($enclosure->getAttribute('url'), $documentUrl);
@@ -297,9 +302,36 @@ final readonly class FeedParser
         );
     }
 
+    /**
+     * Les flux de podcasts publient la vignette de l'épisode dans
+     * itunes:image (attribut href) : c'est souvent leur seul visuel.
+     */
+    private function itunesImage(DOMElement $parent, string $documentUrl): ?string
+    {
+        foreach ($this->children($parent, 'image') as $image) {
+            if (!$image instanceof DOMElement) {
+                continue;
+            }
+            if (($image->namespaceURI ?? '') !== 'http://www.itunes.com/dtds/podcast-1.0.dtd') {
+                // La vignette de canal RSS <image><url> reste une favicon.
+                continue;
+            }
+            $candidate = $this->normalizeUrl($image->getAttribute('href'), $documentUrl);
+            if ($candidate !== null) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
     private function atomImage(DOMElement $entry, string $documentUrl): ?string
     {
         $candidate = $this->mediaRssImage($entry, $documentUrl);
+        if ($candidate !== null) {
+            return $candidate;
+        }
+        $candidate = $this->itunesImage($entry, $documentUrl);
         if ($candidate !== null) {
             return $candidate;
         }
@@ -327,12 +359,8 @@ final readonly class FeedParser
                 if (!$element instanceof DOMElement) {
                     continue;
                 }
-                if ($name === 'content') {
-                    $medium = strtolower(trim($element->getAttribute('medium')));
-                    $type = strtolower(trim($element->getAttribute('type')));
-                    if ($medium !== '' && $medium !== 'image' && !str_starts_with($type, 'image/')) {
-                        continue;
-                    }
+                if (!$this->mediaElementIsImage($element, $name)) {
+                    continue;
                 }
                 $candidate = $this->normalizeUrl($element->getAttribute('url'), $documentUrl);
                 if ($candidate !== null) {
@@ -342,6 +370,29 @@ final readonly class FeedParser
         }
 
         return null;
+    }
+
+    /**
+     * Un media:content sans attribut medium doit rester un candidat image
+     * uniquement lorsque son type déclare image/*. Les flux vidéo, YouTube en
+     * tête, publient un lecteur (application/x-shockwave-flash) sans medium :
+     * retenir ce contenu masquerait la vignette media:thumbnail qui suit.
+     */
+    private function mediaElementIsImage(DOMElement $element, string $name): bool
+    {
+        if ($name !== 'content') {
+            return true;
+        }
+        $medium = strtolower(trim($element->getAttribute('medium')));
+        if ($medium === 'image') {
+            return true;
+        }
+        if ($medium !== '') {
+            return false;
+        }
+        $type = strtolower(trim($element->getAttribute('type')));
+
+        return $type === '' || str_starts_with($type, 'image/');
     }
 
     private function htmlImage(?string $html, string $documentUrl): ?string
@@ -496,7 +547,10 @@ final readonly class FeedParser
         try {
             $date = new DateTimeImmutable($value);
         } catch (\Exception) {
-            return null;
+            $date = $this->localizedDate($value);
+            if ($date === null) {
+                return null;
+            }
         }
         $minimum = new DateTimeImmutable('1970-01-01T00:00:00Z');
         $maximum = $this->clock->now()->modify('+7 days');
@@ -505,6 +559,59 @@ final readonly class FeedParser
         }
 
         return $date->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
+    }
+
+    /**
+     * Certains gabarits francophones publient une date rédigée en toutes
+     * lettres (« Vendredi 25 septembre 2026 - 12:00 ») que DateTimeImmutable
+     * ne décode pas. Les mots du jour et du mois sont traduits, puis
+     * l'intitulé du jour, s'il existe, est retiré : il n'apporte rien à
+     * l'analyse et ses variantes (1er, prem.) brouilleraient le motif.
+     */
+    private function localizedDate(string $value): ?DateTimeImmutable
+    {
+        $months = [
+            'janvier' => 'January', 'février|fevrier' => 'February', 'mars' => 'March',
+            'avril' => 'April', 'mai' => 'May', 'juin' => 'June', 'juillet' => 'July',
+            'août|aout' => 'August', 'septembre' => 'September', 'octobre' => 'October',
+            'novembre' => 'November', 'décembre|decembre' => 'December',
+        ];
+        $normalized = ' ' . mb_strtolower(trim($value)) . ' ';
+        $normalized = str_replace('é', 'e', $normalized);
+        $english = '';
+        foreach (preg_split('/\s+/', trim($normalized)) ?: [] as $word) {
+            foreach ($months as $french => $englishMonth) {
+                foreach (explode('|', $french) as $spelling) {
+                    if ($word === str_replace('é', 'e', $spelling)) {
+                        $word = strtolower($englishMonth);
+                        break 2;
+                    }
+                }
+            }
+            $english .= ' ' . $word;
+        }
+        $english = preg_replace(
+            '/\b(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche|1er|prem(?:ier|\.)?)\b/',
+            '',
+            $english,
+        );
+        if (!is_string($english)) {
+            return null;
+        }
+        $english = str_replace(' à ', ' ', $english);
+        $english = preg_replace('/[,\-:]\s*(\d{1,2}:\d{2})\b/', ' $1', $english);
+        if (!is_string($english)) {
+            return null;
+        }
+        $trimmed = trim(preg_replace('/\s+/', ' ', $english) ?? '');
+        if ($trimmed === '') {
+            return null;
+        }
+        try {
+            return new DateTimeImmutable($trimmed);
+        } catch (\Exception) {
+            return null;
+        }
     }
 
     private function boundedIdentifier(?string $value): ?string

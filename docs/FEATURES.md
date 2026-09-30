@@ -271,6 +271,11 @@ stored locally after validation. Images embedded in feed-provided article
 content retain sanitized absolute HTTP(S) source URLs and are lazy-loaded
 without an HTTP referrer. Active video embeds remain removed.
 
+The article illustration is displayed once: content that repeats the cover
+(source URL identical or a byte/perceptually equivalent rendition) is cleaned
+before storage, and stored duplicates can be repaired with
+`articles:remove-duplicate-covers`.
+
 ## Retention
 
 Normal non-favorite articles older than one year are removed by cleanup.

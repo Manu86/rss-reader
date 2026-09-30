@@ -71,7 +71,7 @@ final readonly class ArticleRepository
         $inserted = 0;
         /** @var array<int, array{id: int, image_url: string|null, article_url: string|null, metadata_fallback: bool}> $mediaCandidates */
         $mediaCandidates = [];
-        /** @var array<int, array{id: int, article_url: string, content_fallback: bool, image_fallback: bool}> $pageCandidates */
+        /** @var array<int, array{id: int, article_url: string, image_url: string|null, content_fallback: bool, image_fallback: bool}> $pageCandidates */
         $pageCandidates = [];
         foreach ($articles as $article) {
             $existingId = null;
@@ -137,6 +137,7 @@ final readonly class ArticleRepository
                         $pageCandidates[$articleId] = [
                             'id' => $articleId,
                             'article_url' => $article->url,
+                            'image_url' => $article->imageUrl,
                             'content_fallback' => !$contentIsSubstantial,
                             'image_fallback' => $article->imageUrl === null,
                         ];
@@ -186,6 +187,7 @@ final readonly class ArticleRepository
                 $pageCandidates[$existingId] = [
                     'id' => $existingId,
                     'article_url' => $article->url,
+                    'image_url' => $article->imageUrl,
                     'content_fallback' => $wantsPageContent,
                     'image_fallback' => $wantsMedia && $article->imageUrl === null,
                 ];
@@ -294,11 +296,11 @@ final readonly class ArticleRepository
         return $candidates;
     }
 
-    /** @return list<array{id: int, user_id: int, url: string}> */
+    /** @return list<array{id: int, user_id: int, url: string, image_path: string|null}> */
     public function pendingPageContentCandidates(): array
     {
         $statement = $this->pdo->query(
-            'SELECT id, user_id, url, content FROM articles '
+            'SELECT id, user_id, url, image_path, content FROM articles '
             . 'WHERE url IS NOT NULL AND content_page_checked_at IS NULL '
             . 'ORDER BY COALESCE(published_at, discovered_at) DESC, id DESC'
         );
@@ -316,6 +318,50 @@ final readonly class ArticleRepository
                 'id' => (int) $row['id'],
                 'user_id' => (int) $row['user_id'],
                 'url' => (string) $row['url'],
+                'image_path' => is_string($row['image_path']) && $row['image_path'] !== '' ? $row['image_path'] : null,
+            ];
+        }
+
+        return $candidates;
+    }
+
+    public function replaceContent(int $articleId, int $userId, string $content, string $now): bool
+    {
+        $statement = $this->pdo->prepare(
+            'UPDATE articles SET content = :content, updated_at = :updated_at '
+            . 'WHERE id = :id AND user_id = :user_id'
+        );
+        $statement->execute([
+            'content' => $content,
+            'updated_at' => $now,
+            'id' => $articleId,
+            'user_id' => $userId,
+        ]);
+
+        return $statement->rowCount() === 1;
+    }
+
+    /** @return list<array{id: int, user_id: int, image_path: string, content: string}> */
+    public function duplicateCoverCandidates(): array
+    {
+        $statement = $this->pdo->query(
+            "SELECT id, user_id, image_path, content FROM articles "
+            . "WHERE image_path IS NOT NULL AND content LIKE '%<img%' "
+            . 'ORDER BY user_id, feed_id, id'
+        );
+        if ($statement === false) {
+            return [];
+        }
+        $candidates = [];
+        foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            if (!is_array($row) || !is_string($row['image_path']) || !is_string($row['content'])) {
+                continue;
+            }
+            $candidates[] = [
+                'id' => (int) $row['id'],
+                'user_id' => (int) $row['user_id'],
+                'image_path' => $row['image_path'],
+                'content' => $row['content'],
             ];
         }
 
@@ -331,6 +377,17 @@ final readonly class ArticleRepository
         $path = $statement->fetchColumn();
 
         return is_string($path) && $path !== '' ? $path : null;
+    }
+
+    public function findContentOwned(int $articleId, int $userId): ?string
+    {
+        $statement = $this->pdo->prepare(
+            'SELECT content FROM articles WHERE id = :id AND user_id = :user_id'
+        );
+        $statement->execute(['id' => $articleId, 'user_id' => $userId]);
+        $content = $statement->fetchColumn();
+
+        return is_string($content) && $content !== '' ? $content : null;
     }
 
     /** @return list<Article> */

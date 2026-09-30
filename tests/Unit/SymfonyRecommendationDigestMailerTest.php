@@ -133,4 +133,67 @@ final class SymfonyRecommendationDigestMailerTest extends TestCase
         self::assertStringContainsString('Content-Disposition: inline;', $serialized);
         self::assertMatchesRegularExpression('/<img src=3D"cid:[^\"]+/', $serialized);
     }
+
+    public function testImageBeyondMimeBudgetFallsBackToEmbeddedPlaceholder(): void
+    {
+        $transport = new class implements MailerInterface {
+            public ?RawMessage $message = null;
+
+            public function send(RawMessage $message, ?Envelope $envelope = null): void
+            {
+                $this->message = $message;
+            }
+        };
+        // Une image dont l'encodage MIME dépasse le budget global : l'article
+        // doit référencer le pictogramme RSS, lui aussi réellement embarqué.
+        $images = new class implements RecommendationImageProvider {
+            public function forArticle(int $userId, Article $article): StoredMedia
+            {
+                unset($userId, $article);
+
+                return new StoredMedia(str_repeat('x', 1_600_000), 'image/jpeg');
+            }
+        };
+        $mailer = new SymfonyRecommendationDigestMailer(
+            $transport,
+            new Address('reader@example.org', 'RSS Reader'),
+            'https://reader.example.org',
+            $images,
+        );
+        $article = new Article(
+            42,
+            10,
+            'Source',
+            false,
+            null,
+            null,
+            'Article illustré',
+            null,
+            null,
+            null,
+            '2026-09-28T05:00:00Z',
+            null,
+            null,
+            [],
+            true,
+        );
+
+        $mailer->send(
+            new RecommendationEmailRecipient(7, 'Alice', 'alice@example.org', 'daily', null),
+            [$article],
+        );
+
+        self::assertInstanceOf(Email::class, $transport->message);
+        $html = $transport->message->getHtmlBody();
+        self::assertIsString($html);
+        self::assertStringContainsString('cid:rss-reader-default-placeholder.png', $html);
+        self::assertStringNotContainsString('cid:recommendation-42', $html);
+        $attachments = $transport->message->getAttachments();
+        self::assertCount(1, $attachments);
+        self::assertSame('image/png', $attachments[0]->getContentType());
+        self::assertSame(
+            'rss-reader-default-placeholder.png',
+            $attachments[0]->getName(),
+        );
+    }
 }

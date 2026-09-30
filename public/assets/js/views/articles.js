@@ -670,6 +670,7 @@ export class ArticlesView {
             onAddFeed: callbackOption(source, callbackValues, 'onAddFeed', ['addFeed']),
             onClearSearch: callbackOption(source, callbackValues, 'onClearSearch', ['clearSearch']),
             onDeleteFeed: callbackOption(source, callbackValues, 'onDeleteFeed', ['deleteFeed']),
+            onEditFeed: callbackOption(source, callbackValues, 'onEditFeed', ['editFeed']),
         };
         this.actions = nestedOption(source, 'actions') || elementById('article-list-feed-actions');
         this.returnTo = normalizeReturnTo(source.returnTo ?? source.from);
@@ -950,7 +951,17 @@ export class ArticlesView {
     _renderActions(context) {
         if (!this.actions) return;
         this.actions.querySelectorAll('[data-article-list-action]').forEach((action) => action.remove());
-        if (context.feedId === null || this.callbacks.onDeleteFeed === NOOP) return;
+        if (context.feedId === null) return;
+        if (this.callbacks.onEditFeed !== NOOP) {
+            this.actions.appendChild(button('Modifier le flux', {
+                className: 'button button-small article-list-edit-button',
+                icon: 'edit',
+                attrs: { 'data-article-list-action': 'edit-feed' },
+                ariaLabel: 'Modifier le flux',
+                onClick: () => this.callbacks.onEditFeed(context.feedId),
+            }));
+        }
+        if (this.callbacks.onDeleteFeed === NOOP) return;
         const deleteButton = button('Supprimer le flux', {
             className: 'button button-small article-list-delete-button',
             icon: 'trash',

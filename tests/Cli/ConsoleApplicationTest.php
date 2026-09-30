@@ -133,6 +133,22 @@ final class ConsoleApplicationTest extends TestCase
         }
     }
 
+    public function testRemoveDuplicateCoversReportsTheCleanedContents(): void
+    {
+        $installation = $this->runConsole(
+            ['app:install', 'administrateur', '--password-stdin'],
+            "correct horse battery staple\n",
+        );
+        self::assertSame(0, $installation['exit_code'], $installation['stderr']);
+
+        $deduplication = $this->runConsole(['articles:remove-duplicate-covers']);
+        self::assertSame(0, $deduplication['exit_code'], $deduplication['stderr']);
+        self::assertStringContainsString(
+            'Déduplication terminée : 0 article(s) vérifié(s), 0 contenu(s) nettoyé(s).',
+            $deduplication['stdout'],
+        );
+    }
+
     /**
      * @param list<string> $arguments
      * @return array{exit_code: int, stdout: string, stderr: string}

@@ -57,12 +57,22 @@ final readonly class RemoteMediaService
         return $this->storage->store($userId, $response->body, $extension);
     }
 
-    /** @param list<array{url: string, min_side: int}> $candidates */
-    public function downloadFirst(int $userId, array $candidates): string
+    /**
+     * Télécharge la première illustration valide et retourne sa clé de
+     * stockage locale avec l'URL source retenue, pour que la page qui la
+     * référence puisse ne pas la répéter dans le contenu.
+     *
+     * @param list<array{url: string, min_side: int}> $candidates
+     * @return array{key: string, url: string}
+     */
+    public function downloadFirst(int $userId, array $candidates): array
     {
         foreach ($candidates as $candidate) {
             try {
-                return $this->download($userId, $candidate['url'], $candidate['min_side']);
+                return [
+                    'key' => $this->download($userId, $candidate['url'], $candidate['min_side']),
+                    'url' => $candidate['url'],
+                ];
             } catch (InvalidMediaException|RemoteHttpException) {
                 continue;
             }

@@ -36,6 +36,7 @@ use App\Security\LoginRateLimiter;
 use App\Security\PasswordPolicy;
 use App\Security\RemoteActionRateLimiter;
 use App\Security\RemoteUrlGuard;
+use App\Service\ArticleCoverDeduplicator;
 use App\Service\ArticleImageMetadataParser;
 use App\Service\ArticlePageContentParser;
 use App\Service\ArticlePageService;
@@ -181,6 +182,7 @@ final readonly class TestApplication
                 new ArticleImageMetadataParser($urlResolver),
                 'Mozilla/5.0 RSSReader/Page-Test',
             ),
+            new ArticleCoverDeduplicator($remoteMedia, $this->mediaStorage, $urlNormalizer),
             new FeedRefreshLock($this->lockDirectory),
         );
         $feedController = new FeedController(new FeedService(

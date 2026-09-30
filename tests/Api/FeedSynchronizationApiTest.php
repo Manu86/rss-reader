@@ -493,6 +493,107 @@ XML;
         self::assertCount(4, $transport->requests, 'La page ne doit être téléchargée qu’une fois.');
     }
 
+    public function testPageContentDoesNotRepeatTheChosenCover(): void
+    {
+        $pageText = 'Sans visuel dans le flux, l’illustration est prise dans la page. '
+            . str_repeat('Texte public. ', 20);
+        $feed = '<?xml version="1.0"?><rss version="2.0"><channel><title>Couverture</title>'
+            . '<link>https://site.test/</link>'
+            . '<item><guid>cover-1</guid><title>Article avec couverture</title>'
+            . '<link>https://site.test/articles/cover-1</link><description>Résumé.</description></item>'
+            . '</channel></rss>';
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feed),
+            new TransportResponse(
+                200,
+                ['content-type' => 'text/html'],
+                '<html><head><meta property="og:image" content="/photos/visuel-1.png"></head><body>'
+                    . '<article><img src="/photos/visuel-1.png"><img src="/photos/annexe-1.png">'
+                    . '<p>' . $pageText . '</p></article></body></html>',
+            ),
+            new TransportResponse(200, ['content-type' => 'image/png'], $this->png(320, 240)),
+            new TransportResponse(200, ['content-type' => 'image/png'], $this->png(320, 240)),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+
+        $created = $this->createFeed($kernel, $csrf, 'https://feeds.test/cover.xml', null);
+        self::assertSame(201, $created->status);
+        $feedId = $this->decode($created)['data']['id'];
+        self::assertIsInt($feedId);
+
+        $article = $this->articles($feedId)[0];
+        self::assertIsString($article['image_path']);
+        self::assertSame('page', $article['content_source']);
+        self::assertStringContainsString(
+            'https://site.test/photos/annexe-1.png',
+            (string) $article['content'],
+        );
+        self::assertStringNotContainsString(
+            'https://site.test/photos/visuel-1.png',
+            (string) $article['content'],
+        );
+    }
+
+    public function testFeedCoverIsNotRepeatedInsideItsOwnContent(): void
+    {
+        $feed = '<?xml version="1.0"?><rss version="2.0" '
+            . 'xmlns:content="http://purl.org/rss/1.0/modules/content/" '
+            . 'xmlns:media="http://search.yahoo.com/mrss/"><channel>'
+            . '<title>Titre du flux</title><link>https://site.test/</link>'
+            . '<item><guid>repetition-1</guid><title>Article doublé</title>'
+            . '<link>https://site.test/articles/repetition-1</link>'
+            . '<media:content url="https://site.test/photos/couverture.png" medium="image"/>'
+            . '<content:encoded><![CDATA[<p>%s</p>'
+            . '<img src="https://site.test/photos/couverture.png"><img src="https://site.test/photos/annexe-1.png">]]></content:encoded>'
+            . '</item></channel></rss>';
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], sprintf($feed, str_repeat('Texte du flux. ', 20))),
+            new TransportResponse(200, ['content-type' => 'image/png'], $this->png(320, 240)),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+
+        $created = $this->createFeed($kernel, $csrf, 'https://feeds.test/repetition.xml', null);
+        self::assertSame(201, $created->status);
+        $feedId = $this->decode($created)['data']['id'];
+        self::assertIsInt($feedId);
+
+        $article = $this->articles($feedId)[0];
+        self::assertIsString($article['image_path']);
+        self::assertSame('feed', $article['content_source']);
+        self::assertStringContainsString('Texte du flux.', (string) $article['content']);
+        self::assertStringContainsString(
+            'https://site.test/photos/annexe-1.png',
+            (string) $article['content'],
+        );
+        self::assertStringNotContainsString(
+            'https://site.test/photos/couverture.png',
+            (string) $article['content'],
+        );
+    }
+
+    private function png(int $width = 1, int $height = 1): string
+    {
+        if ($width === 1 && $height === 1) {
+            $image = base64_decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+                true,
+            );
+            self::assertIsString($image);
+
+            return $image;
+        }
+
+        $canvas = imagecreatetruecolor(max(1, $width), max(1, $height));
+        self::assertNotFalse($canvas);
+        ob_start();
+        imagepng($canvas);
+        $encoded = ob_get_clean();
+        imagedestroy($canvas);
+        self::assertIsString($encoded);
+
+        return $encoded;
+    }
+
     /** @return array{ApiKernel, string} */
     private function authenticatedKernel(string $username, string $password, FakeHttpTransport $transport): array
     {

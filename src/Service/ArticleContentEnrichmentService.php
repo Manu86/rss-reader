@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Clock\Clock;
 use App\Repository\ArticleRepository;
+use App\Storage\MediaStorage;
 use Throwable;
 
 final readonly class ArticleContentEnrichmentService
@@ -13,6 +14,8 @@ final readonly class ArticleContentEnrichmentService
     public function __construct(
         private ArticleRepository $articles,
         private ArticlePageService $articlePages,
+        private ArticleCoverDeduplicator $duplicates,
+        private MediaStorage $mediaStorage,
         private ExternalHtmlTextSanitizer $sanitizer,
         private Clock $clock,
     ) {}
@@ -32,7 +35,7 @@ final readonly class ArticleContentEnrichmentService
             'empty' => 0,
             'failed' => 0,
         ];
-        /** @var array<string, list<array{id: int, user_id: int, url: string}>> $byUrl */
+        /** @var array<string, list<array{id: int, user_id: int, url: string, image_path: string|null}>> $byUrl */
         $byUrl = [];
         foreach ($candidates as $candidate) {
             $byUrl[$candidate['url']][] = $candidate;
@@ -55,14 +58,15 @@ final readonly class ArticleContentEnrichmentService
             try {
                 $page = $this->articlePages->fetch($url);
                 foreach ($sameUrlCandidates as $candidate) {
+                    $userId = (int) $candidate['user_id'];
                     if ($page->content === null) {
-                        $this->articles->markPageContentChecked($candidate['id'], $candidate['user_id'], $now);
+                        $this->articles->markPageContentChecked($candidate['id'], $userId, $now);
                         ++$summary['empty'];
                     } else {
                         $this->articles->setPageContent(
                             $candidate['id'],
-                            $candidate['user_id'],
-                            $page->content,
+                            $userId,
+                            $this->contentWithoutCoverRepetition($userId, $candidate, $page, $now),
                             $now,
                         );
                         ++$summary['extracted'];
@@ -79,6 +83,51 @@ final readonly class ArticleContentEnrichmentService
         }
 
         return $summary;
+    }
+
+    /**
+     * Contenu de page sans la répétition de l'illustration déjà stockée.
+     * L'URL du visuel de page (og:image ou image candidate) est comparée
+     * aux sources du contenu, puis les images encore inconnues le sont
+     * octet pour octet ou perceptuellement, avec les octets du fichier
+     * déjà téléchargé lors d'une synchronisation antérieure.
+     *
+     * @param array{id: int, user_id: int, url: string, image_path: string|null} $candidate
+     */
+    private function contentWithoutCoverRepetition(
+        int $userId,
+        array $candidate,
+        \App\Model\ArticlePageData $page,
+        string $now,
+    ): string {
+        $imagePath = $candidate['image_path'] ?? null;
+        $content = (string) $page->content;
+        $cover = null;
+        if (is_string($imagePath) && $imagePath !== '') {
+            $cover = $this->mediaStorage->read($userId, $imagePath);
+        }
+        $sources = $this->duplicates->imageSources($content);
+        if ($sources === []) {
+            return $content;
+        }
+        $duplicates = [];
+        $knownSources = $sources;
+        foreach ($page->imageCandidates as $imageCandidate) {
+            if (($imageCandidate['min_side'] ?? 0) !== 1) {
+                continue;
+            }
+            $duplicates = array_merge(
+                $duplicates,
+                $this->duplicates->sourcesMatchingUrl($imageCandidate['url'], $knownSources),
+            );
+        }
+        if ($cover === null && $duplicates === []) {
+            return $content;
+        }
+        $remaining = array_values(array_diff($knownSources, $duplicates));
+        $duplicates = $this->duplicates->sourcesMatchingMedia($userId, $cover, $remaining, $duplicates);
+
+        return $this->duplicates->stripSources($content, $duplicates);
     }
 
     private function repairEncodedPageContent(): int

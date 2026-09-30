@@ -267,6 +267,30 @@ test('les cartes de liste ne rendent pas les résumés d’article', () => {
     assert.doesNotMatch(articles, /button button-small button-danger[^\n]+Supprimer le flux/);
 });
 
+test('la liste d’articles d’un flux propose Modifier avant Supprimer', () => {
+    const articles = read('assets/js/views/articles.js');
+    const actions = articles.slice(
+        articles.indexOf('_renderActions(context) {'),
+        articles.indexOf('_clearStatus() {'),
+    );
+
+    assert.match(actions, /className:\s*'button button-small article-list-edit-button'/);
+    assert.match(actions, /ariaLabel:\s*'Modifier le flux'/);
+    assert.match(actions, /this\.callbacks\.onEditFeed\(context\.feedId\)/);
+    assert.match(actions, /className:\s*'button button-small article-list-delete-button'/);
+    assert.match(actions, /ariaLabel:\s*'Supprimer le flux'/);
+    const edit = actions.indexOf("data-article-list-action': 'edit-feed'");
+    const remove = actions.indexOf("data-article-list-action': 'delete-feed'");
+    assert.ok(edit >= 0);
+    assert.ok(remove >= 0);
+    assert.ok(edit < remove);
+
+    const app = read('assets/js/app.js');
+    assert.match(app, /function editFeedFromArticles\(feedId\)/);
+    assert.match(app, /openFeedEditorDialog\(\{\s*feed,\s*categories: app\.categories,/);
+    assert.match(app, /onEditFeed:\s*\(id\) => editFeedFromArticles\(id\)/);
+});
+
 test('le lecteur structure le texte en paragraphes sans injecter de HTML', () => {
     const reader = read('assets/js/views/reader.js');
     const css = read('assets/css/app.css');

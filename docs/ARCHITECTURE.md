@@ -236,6 +236,7 @@ user:disable
 feeds:refresh
 articles:cleanup
 articles:enrich-content
+articles:remove-duplicate-covers
 fts:rebuild
 ```
 
@@ -245,6 +246,13 @@ Exact names may vary slightly but must remain documented and stable.
 feed content is absent or shorter than 200 visible characters. Completed page
 inspections are skipped, each successful result is persisted immediately and
 the maintenance lock prevents overlap with feed synchronization.
+
+`articles:remove-duplicate-covers` removes, from already stored contents, the
+images that duplicate the article illustration kept as its cover. Each
+candidate source is downloaded once through the safe HTTP client and compared
+byte-for-byte or perceptually (8 × 8 grayscale grids) to the stored media before
+anything is rewritten; content sources, FTS indexing and user isolation are
+preserved, and the maintenance lock prevents overlap with feed imports.
 
 Commands return `0` on success and non-zero on failure.
 

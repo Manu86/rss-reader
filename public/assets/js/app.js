@@ -656,6 +656,7 @@ async function renderReading(route, options = {}) {
             onAddFeed: () => openAddFeed(),
             onClearSearch: () => { window.location.hash = '#/'; },
             onDeleteFeed: (id) => confirmDeleteFeedFromArticles(id),
+            onEditFeed: (id) => editFeedFromArticles(id),
         });
     }
     if (!app.readerView) {
@@ -725,6 +726,19 @@ function confirmDeleteFeedFromArticles(feedId) {
             await app.api.deleteFeed(feedId);
             await loadShell();
             window.location.hash = '#/';
+        },
+    });
+}
+
+function editFeedFromArticles(feedId) {
+    const feed = app.feeds.find((value) => Number(value.id) === Number(feedId));
+    if (!feed) return;
+    openFeedEditorDialog({
+        feed,
+        categories: app.categories,
+        onSave: async (changes) => {
+            await app.api.updateFeed(feed.id, changes);
+            await refreshCurrentView();
         },
     });
 }

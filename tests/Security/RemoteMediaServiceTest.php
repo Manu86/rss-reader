@@ -117,12 +117,13 @@ final class RemoteMediaServiceTest extends TestCase
             16_777_216,
         );
 
-        $key = $service->downloadFirst(1, [[
+        $downloaded = $service->downloadFirst(1, [[
             'url' => 'https://cdn.test/article.png',
             'min_side' => 1,
         ]]);
 
-        self::assertStringEndsWith('.png', $key);
+        self::assertStringEndsWith('.png', $downloaded['key']);
+        self::assertSame('https://cdn.test/article.png', $downloaded['url']);
         self::assertSame('RSSReader/Test', $transport->requests[0]->userAgent);
     }
 

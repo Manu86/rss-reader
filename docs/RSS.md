@@ -163,6 +163,10 @@ Keep separate:
 Rules:
 
 -   convert valid dates to UTC;
+-   RSS publication date comes from `pubDate`, otherwise Dublin Core
+    `dc:date`; Atom uses `published`, otherwise `updated`;
+-   French all-words dates that `DateTimeImmutable` cannot read (e.g.
+    `Vendredi 25 septembre 2026 - 12:00`) are translated before parsing;
 -   missing/invalid dates do not block import;
 -   implausible dates must not break ordering/retention;
 -   use `discovered_at` as fallback when publication date is unusable.
@@ -184,6 +188,15 @@ At most five article pages are fetched per feed synchronization. Article-page
 HTML is bounded to 5 MB. The same response is reused for content and image discovery. A successful
 HTML inspection is recorded even when it yields no usable content, while a
 transient retrieval failure remains eligible for a later synchronization.
+
+The stored content never repeats the article illustration: sources whose URL
+matches the retained cover, identical after URL normalization or differing only
+in the file extension plus media whose bytes equal, or whose 8×8 grayscale
+grids of levels compare as equivalent artwork (tolerance 16 diverging pixels),
+are removed before storage. Perceptual matching requires downloading the
+candidate, so it applies to the enrichment backfill and cleanup; during a feed
+synchronization only URL matching runs, to avoid extra downloads beyond the
+documented one-response rule.
 
 HTML is sanitized according to `SECURITY.md` before safe display/storage
 strategy chosen by implementation.
@@ -245,6 +258,13 @@ schemes, event handlers and source sets are rejected.
 
 V1 should reject SVG as downloaded article media.
 
+Content from the feed is cleaned the same way: once the feed cover is stored,
+its source URL is removed from the article content before the reader shows it.
+Historical contents still carrying a bounded duplicate are repaired by
+`articles:remove-duplicate-covers`, which compares stored bytes and perceptual
+signatures. Renditions of the same artwork that crop or reframe it into another
+aspect ratio are not collated: only exact or equivalent 8×8 renderings match.
+
 ## Favicons
 
 Favicon discovery may use feed/site metadata and conventional
@@ -290,10 +310,10 @@ Current implementation details:
     endpoint, a manual refresh and the cron never synchronize the same feed at
     the same time, and a late writer cannot overwrite the validator recorded by
     the synchronization that imported the articles.
--   RSS enclosures, Media RSS content/thumbnails, Atom enclosures and the first
-    safe HTTP(S) image found in feed-provided content are image candidates;
--   declared RSS channel images and Atom icon/logo elements are favicon
-    candidates;
+-   RSS enclosures, itunes:image episode covers, Media RSS content/thumbnails,
+    Atom enclosures and the first safe HTTP(S) image found in feed-provided
+    content are image candidates; declared RSS channel images and Atom
+    icon/logo elements are favicon candidates;
 -   candidates are fetched only after the article/feed transaction has
     completed, so remote I/O never holds an SQLite write transaction;
 -   when the feed has no article image, standard Open Graph/Twitter image

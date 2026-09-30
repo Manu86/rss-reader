@@ -43,6 +43,8 @@ use App\Security\NativeSession;
 use App\Security\PasswordPolicy;
 use App\Security\RemoteActionRateLimiter;
 use App\Service\ArticleContentEnrichmentService;
+use App\Service\ArticleCoverDeduplicator;
+use App\Service\ArticleDuplicateCoverService;
 use App\Service\ArticleImageMetadataParser;
 use App\Service\ArticlePageContentParser;
 use App\Service\ArticlePageService;
@@ -103,6 +105,14 @@ final class ApplicationFactory
             new ArticleImageMetadataParser($urlResolver),
             $config->articlePageUserAgent,
         );
+        $remoteMediaService = new RemoteMediaService(
+            $httpClient,
+            $mediaStorage,
+            $config->mediaMaxBytes,
+            $config->mediaMaxWidth,
+            $config->mediaMaxHeight,
+            $config->mediaMaxPixels,
+        );
         $synchronization = new FeedSynchronizationService(
             $feeds,
             $articles,
@@ -114,15 +124,9 @@ final class ApplicationFactory
             )),
             new TransactionManager($pdo),
             $clock,
-            new RemoteMediaService(
-                $httpClient,
-                $mediaStorage,
-                $config->mediaMaxBytes,
-                $config->mediaMaxWidth,
-                $config->mediaMaxHeight,
-                $config->mediaMaxPixels,
-            ),
+            $remoteMediaService,
             $articlePages,
+            new ArticleCoverDeduplicator($remoteMediaService, $mediaStorage, $urlNormalizer),
             new FeedRefreshLock(dirname($config->cronLockPath)),
         );
         $migrator = new Migrator($pdo, $projectRoot . '/migrations');
@@ -131,6 +135,11 @@ final class ApplicationFactory
             new ArticleRetentionRepository($pdo),
             $mediaCleanup,
             $clock,
+        );
+        $coverDeduplicator = new ArticleCoverDeduplicator(
+            $remoteMediaService,
+            $mediaStorage,
+            $urlNormalizer,
         );
 
         return new ConsoleApplication(
@@ -152,7 +161,15 @@ final class ApplicationFactory
             new ArticleContentEnrichmentService(
                 $articles,
                 $articlePages,
+                $coverDeduplicator,
+                $mediaStorage,
                 new ExternalHtmlTextSanitizer(),
+                $clock,
+            ),
+            new ArticleDuplicateCoverService(
+                $articles,
+                $mediaStorage,
+                $coverDeduplicator,
                 $clock,
             ),
         );
@@ -250,6 +267,11 @@ final class ApplicationFactory
                 new ArticlePageContentParser($urlResolver, $urlNormalizer, new ExternalHtmlTextSanitizer()),
                 new ArticleImageMetadataParser($urlResolver),
                 $config->articlePageUserAgent,
+            ),
+            new ArticleCoverDeduplicator(
+                $remoteMedia,
+                $mediaStorage,
+                $urlNormalizer,
             ),
             new FeedRefreshLock(dirname($config->cronLockPath)),
         );
