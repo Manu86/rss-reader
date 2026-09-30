@@ -70,6 +70,13 @@ Logout invalidates server-side authenticated state.
 
 Use a reasonable session lifetime; no effectively permanent login.
 
+Read-only GET requests release the session write lock after the
+remember-me restore and the CSRF check have been persisted, so their
+parallel fetches run concurrently instead of queuing. Mutating requests
+and the CSRF token bootstrap (`GET /api/auth/csrf`) keep the lock. A
+write arriving after the release reopens the same storage rather than
+being silently dropped, so no security state is lost.
+
 ### Remember me
 
 The login form offers an opt-in "remember me" checkbox, unchecked by default.

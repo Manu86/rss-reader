@@ -44,6 +44,15 @@ final readonly class ApiKernel
                 $this->csrf->validate($request->header('x-csrf-token'));
             }
 
+            // Read-only requests never touch the session after this point:
+            // releasing the write lock here lets their parallel fetches run
+            // concurrently instead of queuing behind each other. Mutating
+            // requests and the CSRF token bootstrap keep the lock, because
+            // they must not interleave with other session writers.
+            if ($this->isReadOnly($request)) {
+                $this->currentUser->closeSession();
+            }
+
             $response = $this->dispatch($request);
         } catch (ApiException $exception) {
             $error = [
@@ -96,6 +105,15 @@ final readonly class ApiKernel
         if ($userId !== null) {
             $this->currentUser->restore($userId);
         }
+    }
+
+    /**
+     * GET /api/auth/csrf generates and stores the CSRF token, so it is a
+     * session writer despite its verb and keeps the write lock.
+     */
+    private function isReadOnly(Request $request): bool
+    {
+        return $request->method === 'GET' && $request->path !== '/api/auth/csrf';
     }
 
     private function dispatch(Request $request): Response

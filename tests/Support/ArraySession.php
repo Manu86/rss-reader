@@ -13,6 +13,8 @@ final class ArraySession implements Session
 
     public int $regenerationCount = 0;
 
+    public bool $closed = false;
+
     public function get(string $key): mixed
     {
         return $this->values[$key] ?? null;
@@ -20,11 +22,19 @@ final class ArraySession implements Session
 
     public function set(string $key, mixed $value): void
     {
+        if ($this->closed) {
+            // Same re-open semantics as NativeSession: a late writer (the
+            // CSRF bootstrap) keeps working instead of silently failing.
+            $this->closed = false;
+        }
         $this->values[$key] = $value;
     }
 
     public function regenerate(): void
     {
+        if ($this->closed) {
+            $this->closed = false;
+        }
         ++$this->regenerationCount;
     }
 
@@ -32,5 +42,10 @@ final class ArraySession implements Session
     {
         $this->values = [];
         $this->regenerate();
+    }
+
+    public function close(): void
+    {
+        $this->closed = true;
     }
 }

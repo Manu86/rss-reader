@@ -192,7 +192,8 @@ a.reader-source-link:hover .reader-source-name { color: var(--accent); }
 .reader-article-content ul, .reader-article-content ol { margin: 0 0 1.1rem; padding-left: 1.5rem; }
 .reader-article-content li { margin: .25rem 0; }
 .reader-article-content blockquote { margin: 1rem 0; padding-left: 1rem; color: var(--muted); border-left: 3px solid var(--line); }
-.reader-article-content pre { max-width: 100%; overflow-x: auto; padding: .8rem; background: var(--soft); border-radius: .4rem; }
+.reader-article-content pre { max-width: 100%; overflow-x: hidden; padding: .8rem; background: var(--soft); border-radius: .4rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reader-article-content pre code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
 .reader-article-content a { overflow-wrap: anywhere; }
 .reader-article-content details { margin: 0 0 1.1rem; padding: .7rem .9rem; background: var(--soft); border-radius: .4rem; }
 .reader-article-content summary { cursor: pointer; font-weight: 700; }

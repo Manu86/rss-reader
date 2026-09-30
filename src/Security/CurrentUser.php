@@ -51,4 +51,15 @@ final readonly class CurrentUser
 
         return $user;
     }
+
+    /**
+     * Releases the session write lock once every earlier write (remember-me
+     * restore, CSRF check) has been persisted. Read-only request handling can
+     * then proceed in parallel without dropping any security state: a later
+     * write attempt fails loudly instead of being silently lost.
+     */
+    public function closeSession(): void
+    {
+        $this->session->close();
+    }
 }
