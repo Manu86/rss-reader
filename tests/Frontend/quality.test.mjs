@@ -136,7 +136,10 @@ test('les interactions essentielles exposent un comportement clavier et des noms
     assert.match(app, /const navigationRoute = route\.name === 'article'[\s\S]*parseRoute\(route\.query\.from \|\| '#\/'\)/);
     assert.match(app, /navigationRoute\.name === name/);
     assert.match(app, /\['Tous', buildRoute\('home'\), 'home', countFor\('global', 'all'\)\]/);
-    assert.match(app, /revealArticleFeedGroup\(articleFeedOf\(article\)\)/);
+    // Ouvrir un article ne doit pas modifier l'état du menu : l'ancien
+    // comportement repliait toutes les catégories pour n'ouvrir que celle
+    // de l'article lu.
+    assert.doesNotMatch(app, /revealArticleFeedGroup/);
     assert.doesNotMatch(app, /article\.feed_id/);
     assert.match(login, /setAttribute\('aria-describedby', 'login-error'\)/);
 });

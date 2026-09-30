@@ -212,22 +212,6 @@ function categoryStateKey(categoryId) {
     return categoryId === null || categoryId === undefined ? 'uncategorized' : Number(categoryId);
 }
 
-function articleFeedOf(article) {
-    return article !== null && typeof article === 'object' && article.feed !== null && typeof article.feed === 'object'
-        ? article.feed
-        : null;
-}
-
-function revealArticleFeedGroup(feed) {
-    const key = categoryStateKey(categoryKeyOf(feed));
-    if (app.openCategoryIds.size === 1 && app.openCategoryIds.has(key)) {
-        return;
-    }
-    app.openCategoryIds.clear();
-    app.openCategoryIds.add(key);
-    renderNavigation();
-}
-
 function navigationRow(label, href, categoryId, current) {
     if (!Array.isArray(app.feeds) || app.feeds.length === 0) {
         return navigationLink(label, href, null, current);
@@ -673,7 +657,6 @@ async function loadArticle(id, markRead = false) {
         }
         renderReaderArticle(article);
         app.articlesView.updateArticle(article);
-        revealArticleFeedGroup(articleFeedOf(article));
     } catch (error) {
         if (generation !== app.readerGeneration) return;
         app.readerView.renderError(error);
