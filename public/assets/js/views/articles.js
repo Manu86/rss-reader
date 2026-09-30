@@ -678,7 +678,7 @@ export class ArticlesView {
         this.currentPage = 0;
         this.totalPages = 0;
         this.loadingMore = false;
-        this.observer = null;
+        this.pendingScrollRestore = null;
         this._clearSearchHandler = () => this.callbacks.onClearSearch();
         if (this.clearSearchButton && typeof this.clearSearchButton.addEventListener === 'function') {
             this.clearSearchButton.addEventListener('click', this._clearSearchHandler);
@@ -728,6 +728,105 @@ export class ArticlesView {
         ));
         replaceChildren(this.list, cards);
         this._configureInfiniteScroll(pagination);
+        this._restoreScrollPosition(requestOptions);
+    }
+
+    /**
+     * Au retour depuis le lecteur, la liste vient d'être re-rendue
+     * (l'article lu a quitté le filtre courant) : la position de
+     * défilement mémorisée au moment du clic la replace là où
+     * l'utilisateur l'avait laissée. Les pages suivantes sont rechargées
+     * en silence jusqu'à retrouver la carte pivot, faute de quoi la
+     * position mémorisée dépasse la hauteur de la page 1 seule. Le
+     * remplacement se fait par rapport au pivot, pas à un offset absolu :
+     * les images à chargement différé déplaceraient sinon la liste sous
+     * les yeux.
+     */
+    _restoreScrollPosition(requestOptions) {
+        const restore = isObject(requestOptions) ? requestOptions.restoreScroll : null;
+        if (!isObject(restore) || !nonEmpty(restore.key)) return;
+        if (restore.key !== this.returnTo) return;
+        if (typeof this.scrollContainer?.scrollTo !== 'function') return;
+        this.pendingScrollRestore = restore;
+        this._applyScrollRestore();
+    }
+
+    async _applyScrollRestore() {
+        const restore = this.pendingScrollRestore;
+        if (!isObject(restore)) return;
+        const pivotId = positiveInteger(restore.pivotId);
+        if (pivotId !== null) {
+            await this._loadPagesUntil(pivotId);
+        }
+        if (this.pendingScrollRestore !== restore || restore.key !== this.returnTo) return;
+        this.pendingScrollRestore = null;
+        const target = this._scrollTargetFromPivot(restore);
+        if (target !== null) {
+            this.scrollContainer.scrollTo({ top: target });
+            // Les images au-dessus du pivot ont des tailles différées : une
+            // seconde application rattrape leur décalage au frame suivant,
+            // puis après un court délai. L'utilisateur garde la main : dès
+            // qu'il a déplacé la liste lui-même, le rattrapage s'arrête.
+            const applied = this.scrollContainer.scrollTop;
+            const settled = () => {
+                if (this.pendingScrollRestore !== null) return;
+                if (this.scrollContainer.scrollTop !== applied) return;
+                const retry = this._scrollTargetFromPivot(restore);
+                if (retry !== null) this.scrollContainer.scrollTo({ top: retry });
+            };
+            requestAnimationFrame(settled);
+            setTimeout(settled, 180);
+        } else {
+            const top = positiveInteger(restore.scrollTop);
+            if (top !== null) this.scrollContainer.scrollTo({ top });
+        }
+    }
+
+    /**
+     * Position de défilement plaçant la carte pivot exactement où elle
+     * était à l'écran au moment du clic ; null si la carte est absente.
+     */
+    _scrollTargetFromPivot(restore) {
+        const pivotId = positiveInteger(restore.pivotId);
+        const pivotOffset = positiveInteger(restore.pivotOffset);
+        if (pivotId === null || pivotOffset === null) return null;
+        const card = this.articleCardElement(pivotId);
+        if (card === null) return null;
+        const scroller = this.scrollContainer;
+        const cardTop = card.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+        const absolute = cardTop + scroller.scrollTop;
+        return Math.max(0, Math.round(absolute - pivotOffset));
+    }
+
+    /**
+     * Recharge les pages suivantes tant que la carte pivot n'est pas dans
+     * la liste, qu'il reste des pages et que la liste restituée ne dépasse
+     * pas encore la hauteur nécessaire. Silencieux : le sentinelle reste
+     * masqué pour l'utilisateur pendant la restauration.
+     */
+    async _loadPagesUntil(pivotId) {
+        const scroller = this.scrollContainer;
+        let guard = 0;
+        while (guard < 100
+            && this.currentPage > 0
+            && this.currentPage < this.totalPages
+            && !this.articleCardElement(pivotId)) {
+            ++guard;
+            const page = this.currentPage + 1;
+            try {
+                await Promise.resolve(this.callbacks.onLoadMore(page));
+            } catch (error) {
+                return;
+            }
+            if (this.currentPage < page) return;
+        }
+    }
+
+    articleCardElement(articleId) {
+        const id = positiveInteger(articleId);
+        if (id === null || !this.list || typeof this.list.querySelector !== 'function') return null;
+
+        return this.list.querySelector(`[data-article-id="${id}"]`);
     }
 
     append(payload = {}, options = {}) {
@@ -752,6 +851,7 @@ export class ArticlesView {
             ?? context.from
             ?? context.filter,
         );
+        this.pendingScrollRestore = null;
         this._applyHeader(context);
         this._renderActions(context);
         this._setSearchVisibility(context.query, requestOptions);

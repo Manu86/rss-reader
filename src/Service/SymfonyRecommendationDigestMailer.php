@@ -71,13 +71,11 @@ final readonly class SymfonyRecommendationDigestMailer implements Recommendation
         $cards = '';
         foreach ($articles as $article) {
             $details = sprintf(
-                '<h2 style="margin:0 0 9px;color:#17212b;font:700 17px/23px Arial,sans-serif">'
-                . '<a class="recommendation-title-link" href="%s" '
-                . 'style="color:#17212b;text-decoration:none">%s</a></h2>'
+                '<h2 class="recommendation-title" style="margin:0 0 9px;font:700 17px/23px Arial,sans-serif">'
+                . '<a class="recommendation-title-link" href="%s">%s</a></h2>'
                 . '<table role="presentation" cellpadding="0" cellspacing="0"><tr>'
-                . '<td style="padding:0 8px 0 0;color:#596673;font:12px/18px Arial,sans-serif">%s</td>'
-                . '<td class="recommendation-category" style="padding:2px 7px;color:#596673;background:#f4f6f8;border:1px solid #dce3e8;'
-                . 'border-radius:999px;font:12px/16px Arial,sans-serif">%s</td>'
+                . '<td class="recommendation-muted" style="padding:0 8px 0 0;font:12px/18px Arial,sans-serif">%s</td>'
+                . '<td class="recommendation-category" style="padding:2px 7px;border-radius:999px;font:12px/16px Arial,sans-serif">%s</td>'
                 . '</tr></table>',
                 $this->escape($this->articleUrl($article)),
                 $this->escape($article->title),
@@ -97,13 +95,13 @@ final readonly class SymfonyRecommendationDigestMailer implements Recommendation
             $cards .= sprintf(
                 '<tr><td style="padding:0 0 12px">'
                 . '<table role="presentation" width="100%%" cellpadding="0" cellspacing="0" '
-                . 'class="recommendation-card" style="width:100%%;border-collapse:separate;background:#ffffff;border:1px solid #dce3e8;'
-                . 'border-radius:10px"><tr><td style="padding:16px">'
+                . 'class="recommendation-card" style="width:100%%;border-collapse:separate;border-radius:10px">'
+                . '<tr><td style="padding:16px">'
                 . '<table role="presentation" cellpadding="0" cellspacing="0"><tr>'
                 . '<td style="padding:0 8px 0 0;vertical-align:middle">'
                 . '<span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;'
                 . 'color:#1264a3;background:#e5f1fb;border-radius:5px;font:700 12px Arial,sans-serif">%s</span>'
-                . '</td><td style="color:#596673;font:12px/18px Arial,sans-serif;vertical-align:middle">%s</td>'
+                . '</td><td class="recommendation-muted" style="font:12px/18px Arial,sans-serif;vertical-align:middle">%s</td>'
                 . '</tr></table>'
                 . '<div style="height:8px;line-height:8px">&nbsp;</div>%s'
                 . '</td></tr></table></td></tr>',
@@ -118,33 +116,52 @@ final readonly class SymfonyRecommendationDigestMailer implements Recommendation
             . '<meta name="supported-color-schemes" content="light dark">'
             . '<style type="text/css">'
             . ':root{color-scheme:light dark;}'
+            /*
+             * Les couleurs vivent dans la feuille de style, pas en styles en
+             * ligne : Thunderbird assombri n'expose pas
+             * prefers-color-scheme:dark aux messages mais écrase les
+             * déclarations de la feuille — une couleur en ligne l'emporterait
+             * sur le mode sombre et laisserait des cartes blanches éclatantes.
+             */
+            . '.digest-page{background:#f4f6f8;color:#17212b;}'
+            . '.recommendation-card{background:#ffffff;border:1px solid #97a4ae;}'
+            . '.recommendation-category{color:#596673;background:#f4f6f8;border:1px solid #97a4ae;}'
+            . '.recommendation-title{color:#17212b;}'
+            . '.recommendation-title-link{color:#17212b;text-decoration:none;}'
+            . '.recommendation-muted{color:#596673;}'
             . '.recommendation-title-link:hover{color:#1264a3!important;text-decoration:underline!important;}'
             . '@media(prefers-color-scheme:dark){'
             . 'body{background:#151b21!important;color:#e4e9ed!important;}'
+            . '.digest-page{background:#151b21!important;color:#e4e9ed!important;}'
             . '.recommendation-card{background:#202830!important;border-color:#303a43!important;}'
             . '.recommendation-category{background:#252e36!important;border-color:#36414b!important;color:#c1cbd3!important;}'
+            . '.recommendation-title,.recommendation-title-link{color:#e4e9ed!important;}'
+            . '.recommendation-muted{color:#a8b4bd!important;}'
             . '}'
+            . '[data-ogsc] .digest-page{background:#151b21!important;color:#e4e9ed!important;}'
             . '[data-ogsc] .recommendation-card{background:#202830!important;border-color:#303a43!important;}'
             . '[data-ogsc] .recommendation-category{background:#252e36!important;border-color:#36414b!important;color:#c1cbd3!important;}'
+            . '[data-ogsc] .recommendation-title,[data-ogsc] .recommendation-title-link{color:#e4e9ed!important;}'
+            . '[data-ogsc] .recommendation-muted{color:#a8b4bd!important;}'
             . '</style>'
             . '</head>'
-            . '<body style="margin:0;padding:0;background:#f4f6f8;color:#17212b">'
+            . '<body style="margin:0;padding:0">'
             . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-            . 'style="width:100%;border-collapse:collapse;background:#f4f6f8"><tr><td align="center" style="padding:24px 12px">'
+            . 'class="digest-page" style="width:100%;border-collapse:collapse"><tr><td align="center" style="padding:24px 12px">'
             . '<table role="presentation" width="600" cellpadding="0" cellspacing="0" '
             . 'style="width:100%;max-width:600px;border-collapse:collapse">'
             . '<tr><td style="padding:0 0 18px">'
             . '<p style="margin:0 0 5px;color:#1264a3;font:700 12px/18px Arial,sans-serif;letter-spacing:1.2px;'
             . 'text-transform:uppercase">RSS Reader</p>'
-            . '<h1 style="margin:0;color:#17212b;font:700 25px/32px Arial,sans-serif">Recommandé pour vous</h1>'
+            . '<h1 class="recommendation-title" style="margin:0;font:700 25px/32px Arial,sans-serif">Recommandé pour vous</h1>'
             . '</td></tr>'
             . $cards
-            . '<tr><td style="padding:10px 0 0;color:#596673;font:13px/20px Arial,sans-serif;text-align:center">'
+            . '<tr><td class="recommendation-muted" style="padding:10px 0 0;font:13px/20px Arial,sans-serif;text-align:center">'
             . '<a href="' . $this->escape($this->baseUrl . '/#/recommandations')
             . '" style="display:inline-block;padding:10px 15px;color:#ffffff;background:#1264a3;border-radius:7px;'
             . 'text-decoration:none;font-weight:700">Ouvrir mes recommandations</a>'
-            . '<p style="margin:18px 0 0"><a href="' . $this->escape($this->baseUrl . '/#/parametres')
-            . '" style="color:#1264a3">Gérer la fréquence des emails</a></p>'
+            . '<p style="margin:18px 0 0"><a class="recommendation-title-link" href="' . $this->escape($this->baseUrl . '/#/parametres')
+            . '">Gérer la fréquence des emails</a></p>'
             . '</td></tr></table></td></tr></table></body></html>';
     }
 

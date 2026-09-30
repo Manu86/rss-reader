@@ -409,3 +409,27 @@ test('la navigation place Recommandé en premier et Tous après Lus', () => {
         { label: 'Favoris', route: 'favorites' },
     ]);
 });
+
+test('le retour depuis le lecteur restaure la position de la liste', () => {
+    const app = read('assets/js/app.js');
+    const articles = read('assets/js/views/articles.js');
+
+    // La position est mémorisée au moment du clic vers l'article, avec un
+    // pivot : la liste est re-rendue au retour, il faut retrouver la carte.
+    assert.match(app, /rememberArticleListScroll\(listRoute, route\.params\.id\)/);
+    assert.match(app, /articleListScrollRestore: null/);
+    assert.match(app, /app\.articleListScrollRestore = null;/);
+
+    // La restauration applique la position mémorisée après re-rendu, en
+    // rechargeant les pages nécessaires jusqu'au pivot, et seulement si la
+    // route rendue est toujours celle de la capture.
+    assert.match(articles, /_restoreScrollPosition\(requestOptions\)/);
+    assert.match(articles, /restore\.key !== this\.returnTo/);
+    assert.match(articles, /_loadPagesUntil\(pivotId\)/);
+    assert.match(articles, /this\.pendingScrollRestore = null;/);
+    assert.match(articles, /this\.scrollContainer\.scrollTo\(\{ top: target \}\)/);
+    assert.match(articles, /articleCardElement\(pivotId\)/);
+    assert.match(articles, /_scrollTargetFromPivot\(restore\)/);
+    // Une nouvelle liste en cours de chargement annule la restauration.
+    assert.match(articles, /renderLoading\(options = \{\}\) \{[\s\S]*?pendingScrollRestore = null/);
+});

@@ -5,7 +5,7 @@ import { ManagementView } from './views/management.js?v=4';
 import { SettingsView } from './views/settings.js?v=8';
 import { openAddFeedDialog, openCategoryDialog, openConfirmDialog, openFeedEditorDialog } from './views/feed-dialogs.js';
 import { createLoginView } from './views/login.js';
-import { ArticlesView } from './views/articles.js?v=28';
+import { ArticlesView } from './views/articles.js?v=30';
 import { ReaderView } from './views/reader.js?v=35';
 import { buildRoute, parseRoute } from './router.js?v=26';
 import { errorMessage, el, icon, setChildren } from './utils/dom.js';
@@ -27,6 +27,7 @@ const app = {
     articleListGeneration: 0,
     readerGeneration: 0,
     articleListRouteUrl: null,
+    articleListScrollRestore: null,
     openCategoryIds: new Set(),
 };
 
@@ -517,9 +518,52 @@ function categoryFilterUrl(route, selection) {
         : `category_id=${encodeURIComponent(selection)}`}`;
 }
 
+/**
+ * Mémorise la position de défilement de la liste d'articles au moment de
+ * la quitter pour lire un article : la liste est rechargée au retour
+ * (l'article vient d'être marqué lu), et sans cela le défilement retombe
+ * au début de la liste. Le pivot n'est pas l'article cliqué — il vient de
+ * quitter le filtre « Non lus » et ne serait jamais retrouvé — mais la
+ * carte qui le précédait (sinon celle qui le suit) : elle restera présente
+ * après le re-rendu. Sa position relative à la fenêtre est mémorisée aussi,
+ * pour replacer la liste par rapport à elle plutôt qu'à un offset absolu
+ * fragile face aux images à chargement différé.
+ */
+function rememberArticleListScroll(listRoute, activeArticleId) {
+    const scroller = app.articlesView?.scrollContainer;
+    const articleId = positiveIntegerArticle(activeArticleId);
+    if (!scroller || typeof scroller.scrollTop !== 'number' || articleId === null) {
+        app.articleListScrollRestore = null;
+        return;
+    }
+    const adjacent = app.articlesView.getAdjacentArticleIds(articleId);
+    const pivotId = adjacent.previousId ?? adjacent.nextId;
+    const pivot = pivotId === null ? null : app.articlesView.articleCardElement(pivotId);
+    if (pivot === null) {
+        app.articleListScrollRestore = { key: routeUrl(listRoute), scrollTop: scroller.scrollTop };
+        return;
+    }
+    const scrollerRect = scroller.getBoundingClientRect();
+    const pivotRect = pivot.getBoundingClientRect();
+    app.articleListScrollRestore = {
+        key: routeUrl(listRoute),
+        scrollTop: scroller.scrollTop,
+        pivotId,
+        pivotOffset: pivotRect.top - scrollerRect.top,
+    };
+}
+
+function positiveIntegerArticle(value) {
+    const number = typeof value === 'number' ? value : Number(value);
+    return Number.isSafeInteger(number) && number > 0 ? number : null;
+}
+
 async function loadArticles(route, page = 1, activeArticleId = null, append = false) {
     const context = routeContext(route);
-    const options = { ...context, returnTo: routeUrl(route), activeArticleId };
+    const restore = !append && page === 1
+        ? app.articleListScrollRestore
+        : null;
+    const options = { ...context, returnTo: routeUrl(route), activeArticleId, restoreScroll: restore };
     const generation = append ? app.articleListGeneration : app.articleListGeneration + 1;
     if (!append) {
         app.articleListGeneration = generation;
@@ -535,6 +579,7 @@ async function loadArticles(route, page = 1, activeArticleId = null, append = fa
             if (generation !== app.articleListGeneration) return;
             app.articlesView.render({ data: dataOf(response) }, { ...options, page });
             app.articleListRouteUrl = routeUrl(route);
+            app.articleListScrollRestore = null;
             return;
         }
         const response = route.name === 'search'
@@ -546,6 +591,7 @@ async function loadArticles(route, page = 1, activeArticleId = null, append = fa
         } else {
             app.articlesView.render(response, { ...options, page });
             app.articleListRouteUrl = routeUrl(route);
+            app.articleListScrollRestore = null;
         }
     } catch (error) {
         if (generation !== app.articleListGeneration) return;
@@ -673,6 +719,7 @@ async function renderReading(route, options = {}) {
     if (route.name === 'article') {
         const listRoute = parseRoute(route.query.from || '#/');
         if (app.articleListRouteUrl === routeUrl(listRoute)) {
+            rememberArticleListScroll(listRoute, route.params.id);
             app.articlesView.setActiveArticle(route.params.id);
         } else {
             await loadArticles(listRoute, 1, route.params.id);

@@ -184,7 +184,7 @@ more substantial public extract. It first uses schema.org `Article` or
 authenticates to the publisher, executes page scripts or circumvents a paywall;
 subscriber-only text is not available to this fallback.
 
-At most five article pages are fetched per feed synchronization. Article-page
+At most fifteen article pages are fetched per feed synchronization. Article-page
 HTML is bounded to 5 MB. The same response is reused for content and image discovery. A successful
 HTML inspection is recorded even when it yields no usable content, while a
 transient retrieval failure remains eligible for a later synchronization.
@@ -195,8 +195,9 @@ in the file extension plus media whose bytes equal, or whose 8×8 grayscale
 grids of levels compare as equivalent artwork (tolerance 16 diverging pixels),
 are removed before storage. Perceptual matching requires downloading the
 candidate, so it applies to the enrichment backfill and cleanup; during a feed
-synchronization only URL matching runs, to avoid extra downloads beyond the
-documented one-response rule.
+synchronization it runs only when the cover itself came from the article page,
+by comparing the remaining page candidates at the cost of a few bounded
+downloads.
 
 HTML is sanitized according to `SECURITY.md` before safe display/storage
 strategy chosen by implementation.

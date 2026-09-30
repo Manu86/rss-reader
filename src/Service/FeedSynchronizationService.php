@@ -19,7 +19,14 @@ use Throwable;
 
 final readonly class FeedSynchronizationService implements FeedRefresher
 {
-    private const MAX_ARTICLE_PAGES_PER_SYNCHRONIZATION = 5;
+    /**
+     * Le plafond borne le temps d'une synchronisation face aux pages
+     * distantes. Quinze tentatives rattrapent un flux qui publie un lot
+     * d'un coup (l'ajout d'un flux importe jusqu'à ~100 articles) en une
+     * poignée de synchronisations, tout en gardant la passe de pages sous
+     * quelques dizaines de secondes.
+     */
+    private const MAX_ARTICLE_PAGES_PER_SYNCHRONIZATION = 15;
 
     public function __construct(
         private FeedRepository $feeds,
@@ -214,9 +221,20 @@ final readonly class FeedSynchronizationService implements FeedRefresher
                         if (!$this->articles->setImagePath($candidate['id'], $feed->userId, $cover['key'], $now)) {
                             $this->media->discard($feed->userId, $cover['key']);
                         }
-                        $duplicates = $this->duplicates->sourcesMatchingUrl(
-                            $cover['url'],
-                            $page->content === null ? [] : $this->duplicates->imageSources($page->content),
+                        $contentSources = $page->content === null
+                            ? []
+                            : $this->duplicates->imageSources($page->content);
+                        $duplicates = $this->duplicates->sourcesMatchingUrl($cover['url'], $contentSources);
+                        // Les gabarits publient la même illustration sous
+                        // plusieurs résolutions dont l'URL diffère : la
+                        // comparaison perceptuelle les reconnaît au prix de
+                        // quelques téléchargements de contrôle, bornés par
+                        // la liste des candidates de la page.
+                        $duplicates = $this->duplicates->sourcesMatchingStoredMedia(
+                            $feed->userId,
+                            $cover['key'],
+                            array_values(array_diff($contentSources, $duplicates)),
+                            $duplicates,
                         );
                     } catch (Throwable) {
                         error_log(sprintf(

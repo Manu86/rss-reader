@@ -99,6 +99,30 @@ final readonly class ArticleCoverDeduplicator
     }
 
     /**
+     * Sources dont le média reproduit la couverture déjà stockée : la
+     * couverture est relue depuis le stockage local, sans nouveau
+     * téléchargement, puis les candidates restantes sont comparées octet
+     * pour octet ou perceptuellement.
+     *
+     * @param list<string> $sources
+     * @param list<string> $preceding Sources déjà reconnues par URL.
+     * @return list<string>
+     */
+    public function sourcesMatchingStoredMedia(
+        int $userId,
+        string $coverKey,
+        array $sources,
+        array $preceding = [],
+    ): array {
+        $cover = $this->storage->read($userId, $coverKey);
+        if ($cover === null) {
+            return $preceding;
+        }
+
+        return $this->sourcesMatchingMedia($userId, $cover, $sources, $preceding);
+    }
+
+    /**
      * Sources dont le média téléchargé reproduit le visuel stocké :
      * octets strictement identiques, ou grilles perceptuelles quasi
      * équivalentes. Chaque téléchargement est immédiatement libéré ; un

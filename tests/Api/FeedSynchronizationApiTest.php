@@ -512,7 +512,7 @@ XML;
                     . '<p>' . $pageText . '</p></article></body></html>',
             ),
             new TransportResponse(200, ['content-type' => 'image/png'], $this->png(320, 240)),
-            new TransportResponse(200, ['content-type' => 'image/png'], $this->png(320, 240)),
+            new TransportResponse(200, ['content-type' => 'image/png'], $this->distinctPng(480, 320)),
         ]);
         [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
 
@@ -530,6 +530,56 @@ XML;
         );
         self::assertStringNotContainsString(
             'https://site.test/photos/visuel-1.png',
+            (string) $article['content'],
+        );
+    }
+
+    /**
+     * Les gabarits publient la même illustration sous plusieurs résolutions
+     * dont l'URL diffère (redimensionneur de type /resizer/taille/…) : la
+     * couverture retenue depuis og:image et l'image du contenu reproduisent
+     * alors le même visuel. La comparaison perceptuelle, au prix du
+     * téléchargement de contrôle de la candidate, retire la répétition dès
+     * la synchronisation.
+     */
+    public function testPageContentDoesNotRepeatACoverPublishedUnderAnotherResolution(): void
+    {
+        $pageText = 'L’illustration est servie dans deux résolutions par le même site. '
+            . str_repeat('Texte public. ', 20);
+        $feed = '<?xml version="1.0"?><rss version="2.0"><channel><title>Couverture</title>'
+            . '<link>https://site.test/</link>'
+            . '<item><guid>cover-2</guid><title>Article à deux résolutions</title>'
+            . '<link>https://site.test/articles/cover-2</link><description>Résumé.</description></item>'
+            . '</channel></rss>';
+        $artwork = $this->png(320, 240);
+        $transport = new FakeHttpTransport([
+            new TransportResponse(200, ['content-type' => 'application/rss+xml'], $feed),
+            new TransportResponse(
+                200,
+                ['content-type' => 'text/html'],
+                '<html><head><meta property="og:image" content="/resizer/1600x900/photos/visuel-2.png"></head><body>'
+                    . '<article><img src="/resizer/932x582/photos/visuel-2.png"><img src="/photos/annexe-2.png">'
+                    . '<p>' . $pageText . '</p></article></body></html>',
+            ),
+            new TransportResponse(200, ['content-type' => 'image/png'], $artwork),
+            new TransportResponse(200, ['content-type' => 'image/png'], $artwork),
+            new TransportResponse(200, ['content-type' => 'image/png'], $this->distinctPng(640, 480)),
+        ]);
+        [$kernel, $csrf] = $this->authenticatedKernel('alice', 'correct horse battery staple', $transport);
+
+        $created = $this->createFeed($kernel, $csrf, 'https://feeds.test/cover2.xml', null);
+        self::assertSame(201, $created->status);
+        $feedId = $this->decode($created)['data']['id'];
+        self::assertIsInt($feedId);
+
+        $article = $this->articles($feedId)[0];
+        self::assertIsString($article['image_path']);
+        self::assertStringContainsString(
+            'https://site.test/photos/annexe-2.png',
+            (string) $article['content'],
+        );
+        self::assertStringNotContainsString(
+            '/resizer/932x582/photos/visuel-2.png',
             (string) $article['content'],
         );
     }
@@ -585,6 +635,30 @@ XML;
 
         $canvas = imagecreatetruecolor(max(1, $width), max(1, $height));
         self::assertNotFalse($canvas);
+        ob_start();
+        imagepng($canvas);
+        $encoded = ob_get_clean();
+        imagedestroy($canvas);
+        self::assertIsString($encoded);
+
+        return $encoded;
+    }
+
+    /**
+     * Un visuel de test réellement distinct : les toiles unies de png()
+     * produisent des grilles perceptuelles identiques et seraient
+     * dédoublonnées à raison.
+     */
+    private function distinctPng(int $width, int $height): string
+    {
+        $canvas = imagecreatetruecolor(max(1, $width), max(1, $height));
+        self::assertNotFalse($canvas);
+        $background = imagecolorallocate($canvas, 240, 240, 240);
+        $mark = imagecolorallocate($canvas, 200, 30, 30);
+        self::assertNotFalse($background);
+        self::assertNotFalse($mark);
+        imagefill($canvas, 0, 0, $background);
+        imagefilledrectangle($canvas, 0, 0, $width - 1, (int) ($height / 2), $mark);
         ob_start();
         imagepng($canvas);
         $encoded = ob_get_clean();
